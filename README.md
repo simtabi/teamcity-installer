@@ -38,6 +38,8 @@ which otherwise lives in a log file inside a Docker volume.
 
 - [Installation](docs/installation.md) — requirements, what the first run does, how to remove it
 - [Getting started](docs/getting-started.md) — from `./tc` to a green build agent
+- [Users](docs/users.md) — the super user token, the first administrator, and adding more
+- [Data safety](docs/data-safety.md) — what destroys data (only one command) and what does not
 - [Configuration](docs/configuration.md) — every setting in `stack/.env` and what changes it
 - [Architecture](docs/architecture.md) — how the pieces fit, and why the console is containerized
 - [Changelog](CHANGELOG.md) — what changed, and when

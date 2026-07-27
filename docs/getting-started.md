@@ -125,6 +125,9 @@ data, and it requires typing the stack name to confirm.
 
 ## Next
 
+- [Users](users.md) — adding more users, and getting back in if you are locked out
+- [Data safety](data-safety.md) — which commands keep your data and which destroy it
+
 - [Configuration](configuration.md) — change the port, memory, agent count or version
 - [Backup](tools/backup.md) — pick the right backup tier before you need one
 - [Fix an agent that will not connect](recipes/fix-agent-cannot-connect.md)

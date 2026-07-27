@@ -78,6 +78,12 @@ declared `VOLUME` left unmapped: nothing fails, but agent tool and plugin caches
 every recreate, and unnamed volumes accumulate on the daemon. `./tc doctor` reports the
 anonymous-volume count so a regression shows up.
 
+## Does recreating containers lose data?
+
+No. Every piece of state lives in a named volume that outlives any container, so `up`, `restart`
+and `upgrade` all rebuild containers and keep your data. Only `./tc reset` deletes it, and it makes
+you type the stack name. See [data safety](../data-safety.md) for the per-command table.
+
 ## Inspecting
 
 ```sh
