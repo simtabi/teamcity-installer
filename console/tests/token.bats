@@ -72,15 +72,29 @@ LOG
     [ "$output" = '2000000000000000002' ]
 }
 
-@test "the acceptance check reports 'cannot tell' rather than guessing" {
-    # Away from the maintenance page there is nothing to replay the form against,
-    # so it must return 2 and not claim either outcome.
-    stack::server_state() { printf 'ready'; }
-    run stack::_token_accepted '123456'
-    [ "$status" -eq 2 ]
-
+@test "a starting server yields 'cannot tell', never a guess" {
+    # Nothing to ask yet, so it must not claim either outcome.
     stack::server_state() { printf 'starting'; }
     run stack::_token_accepted '123456'
+    [ "$status" -eq 2 ]
+}
+
+# Past the maintenance page the token becomes a basic-auth password, so the
+# check follows it there rather than giving up — "could not confirm" is a poor
+# answer at exactly the moment the server finishes starting.
+@test "a ready server is checked over REST" {
+    stack::server_state() { printf 'ready'; }
+
+    curl() { printf '200'; }                       # server accepts it
+    run stack::_token_accepted 'good-token'
+    [ "$status" -eq 0 ]
+
+    curl() { printf '401'; }                       # server rejects it
+    run stack::_token_accepted 'stale-token'
+    [ "$status" -eq 1 ]
+
+    curl() { printf '503'; }                       # anything else is unknown
+    run stack::_token_accepted 'unclear'
     [ "$status" -eq 2 ]
 }
 

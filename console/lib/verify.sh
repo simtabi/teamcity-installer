@@ -80,7 +80,12 @@ verify::_stack() {
     fi
 
     case $(stack::server_state) in
-        ready)    verify::_pass 'server answers HTTP' '200, setup complete' ;;
+        ready)    if stack::needs_first_user; then
+                      verify::_fail 'server answers HTTP' '200, but no user account exists'
+                      verify::_why 'Run ./tc token and create the first administrator.'
+                  else
+                      verify::_pass 'server answers HTTP' '200, setup complete'
+                  fi ;;
         setup)    verify::_pass 'server answers HTTP' '503, awaiting first-run setup' ;;
         starting) verify::_fail 'server answers HTTP' 'no response' ;;
     esac

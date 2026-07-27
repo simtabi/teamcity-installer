@@ -64,7 +64,12 @@ doctor::_http() {
     state=$(stack::server_state)
 
     case $state in
-        ready)    ui::note "  $(conf::url)  →  $code, ready" ;;
+        ready)    if stack::needs_first_user; then
+                      ui::note "  $(conf::url)  →  $code, up but no user account exists"
+                      ui::note '  Create the first administrator: ./tc token, then sign in with a blank username.'
+                  else
+                      ui::note "  $(conf::url)  →  $code, ready"
+                  fi ;;
         setup)    ui::note "  $(conf::url)  →  $code, up but awaiting first-run setup"
                   ui::note '  It will ask for a super user token first. Get it with:  ./tc token' ;;
         starting) ui::note "  $(conf::url)  →  no response (still starting, or not running)" ;;

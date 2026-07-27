@@ -50,6 +50,26 @@ That account is stored in the database, so it survives restarts, upgrades and `.
 > one you have is dead — run `./tc token` again. See
 > [fix a rejected token](recipes/token-rejected.md).
 
+## If the server started before you created an account
+
+TeamCity can finish starting — `/login.html` answers 200, everything looks healthy — with **no user
+accounts at all**. Nobody can sign in, and nothing about the page says why.
+
+The console names that state rather than reporting the server as ready:
+
+```
+warn   Up at http://localhost:8111, but no user account exists yet — run  ./tc token
+```
+
+`./tc verify` fails the check, and `./tc doctor` says the same. To get in:
+
+```sh
+./tc token
+```
+
+Sign in at `/login.html` with a **blank username** and the token as the password, then
+**Administration → Users → Create user account**.
+
 ## Adding more users
 
 Once an administrator exists, users are managed inside TeamCity, not by this console:

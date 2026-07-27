@@ -115,6 +115,7 @@ stack::_await_ready() {
             ready)
                 ui::blank
                 ui::ok "TeamCity is up at $(conf::url)"
+                stack::needs_first_user && stack::first_user_hint
                 return 0 ;;
             setup)
                 ui::blank
@@ -186,9 +187,25 @@ stack::super_user_token() {
 stack::_token_accepted() {
     local token=$1
     [[ -n $token ]] || return 2
-    [[ $(stack::server_state) == setup ]] || return 2
 
     local base="http://host.docker.internal:$TC_PORT"
+
+    # Past the maintenance page the token stops being a form field and becomes a
+    # password: TeamCity accepts it over HTTP basic auth with an empty username.
+    # Checking only the maintenance form meant the answer became "cannot confirm"
+    # exactly when the server finished starting, which is not much of an answer.
+    if [[ $(stack::server_state) == ready ]]; then
+        local code
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+            -u ":$token" "$base/app/rest/server" 2>/dev/null) || return 2
+        case $code in
+            200) return 0 ;;
+            401|403) return 1 ;;
+            *) return 2 ;;
+        esac
+    fi
+
+    [[ $(stack::server_state) == setup ]] || return 2
     local jar; jar=$(mktemp) || return 2
     local page csrf result
 
@@ -240,6 +257,54 @@ stack::show_super_user_token() {
         && ui::note '     The database step is already configured and will not be shown.'
     ui::blank
     ui::note 'Then come back and run  Agents → Authorize  so builds can run.'
+}
+
+# How many user accounts exist.
+#
+# A server that has finished starting reports "ready" and answers 200 on
+# /login.html, but with no accounts nobody can actually sign in — the licence has
+# been accepted and the first administrator has not been created. That state
+# looks healthy from the outside and is the last hurdle of a first run, so it is
+# worth naming rather than leaving someone at a login form with no credentials.
+#
+# Prints a count, or nothing when it cannot be determined.
+stack::user_count() {
+    local token; token=$(stack::super_user_token)
+    [[ -n $token ]] || return 1
+    [[ $(stack::server_state) == ready ]] || return 1
+
+    curl -s --max-time 10 -u ":$token" \
+        "http://host.docker.internal:$TC_PORT/app/rest/users" 2>/dev/null \
+        | grep -oE 'count="[0-9]+"' | head -1 | grep -oE '[0-9]+'
+}
+
+# True when the server is up but has no accounts yet.
+stack::needs_first_user() {
+    local n; n=$(stack::user_count) || return 1
+    [[ $n == 0 ]]
+}
+
+stack::first_user_hint() {
+    local token; token=$(stack::super_user_token)
+    ui::blank
+    ui::warn 'TeamCity is running, but no user account exists yet.'
+    ui::note 'Nobody can sign in until you create the first administrator.'
+    ui::blank
+    ui::note "  1. Open  $(conf::url)/login.html"
+    ui::note '  2. Leave the username blank and use this token as the password:'
+    if [[ -n $token ]]; then
+        ui::blank
+        if ui::plain; then
+            printf '        %s\n' "$token" >&2
+        else
+            gum style --foreground "$UI_ACCENT" --bold --padding '0 8' "$token" >&2
+        fi
+        ui::blank
+    else
+        ui::note '     (run  ./tc token  to fetch it)'
+    fi
+    ui::note '  3. Administration → Users → Create user account.'
+    ui::note 'Use a private window: signing in as super user replaces your session.'
 }
 
 # Standalone command: print the current token, with context.
@@ -347,7 +412,12 @@ stack::status() {
 
     ui::blank
     case $(stack::server_state) in
-        ready)    ui::ok "HTTP ready at $(conf::url)" ;;
+        ready)
+            if stack::needs_first_user; then
+                ui::warn "Up at $(conf::url), but no user account exists yet — run  ./tc token"
+            else
+                ui::ok "HTTP ready at $(conf::url)"
+            fi ;;
         setup)    ui::warn "Up at $(conf::url), waiting for first-run setup (licence and admin account)." ;;
         starting) ui::warn "No HTTP response on $(conf::url)" ;;
     esac
