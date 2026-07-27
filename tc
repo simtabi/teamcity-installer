@@ -1,0 +1,174 @@
+#!/bin/sh
+#
+# tc — launcher for the containerized TeamCity control console.
+#
+# This is the only file that executes on the host. Its sole dependency is the
+# `docker` binary. Everything else — the menu, its dependencies, the whole
+# toolchain — lives inside the console image.
+#
+# Usage:  ./tc                 interactive menu
+#         ./tc <command> ...   non-interactive, see ./tc --help
+
+set -eu
+
+IMAGE_NAME='teamcity-console'
+ROOT=$(cd "$(dirname "$0")" && pwd)
+
+# Colour only when stderr is a terminal and NO_COLOR is unset, so piping ./tc
+# anywhere yields clean text.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_ERR=$(printf '\033[31m'); C_DIM=$(printf '\033[2m'); C_OFF=$(printf '\033[0m')
+else
+    C_ERR=''; C_DIM=''; C_OFF=''
+fi
+
+die()  { printf '%serror%s  %s\n' "$C_ERR" "$C_OFF" "$1" >&2; exit 1; }
+note() { printf '%s%s%s\n' "$C_DIM" "$1" "$C_OFF" >&2; }
+
+# --- docker present -----------------------------------------------------------
+
+# WSL running the project from /mnt/c goes through the 9p bridge, which is slow
+# enough to be worth saying out loud.
+case "$ROOT" in
+    /mnt/[a-z]/*)
+        note "Note: the project is on a Windows drive ($ROOT)."
+        note 'File access through /mnt is slow. Moving it into the Linux'
+        note 'filesystem (e.g. ~/teamcity) is markedly faster.'
+        ;;
+esac
+
+command -v docker >/dev/null 2>&1 || die 'docker not found on PATH.
+
+Install one of:
+  OrbStack        https://orbstack.dev            (recommended on Apple Silicon)
+  Docker Desktop  https://docker.com/products/docker-desktop
+
+Nothing else needs installing — the console runs inside a container.'
+
+# --- resolve the daemon socket ------------------------------------------------
+#
+# Do not hardcode /var/run/docker.sock. OrbStack puts it under
+# ~/.orbstack/run/docker.sock and does not always create the classic path, so a
+# hardcoded mount silently gives the console a socket that does not exist.
+
+resolve_socket() {
+    endpoint=$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)
+    [ -n "${endpoint:-}" ] || endpoint="${DOCKER_HOST:-}"
+    [ -n "${endpoint:-}" ] || endpoint='unix:///var/run/docker.sock'
+
+    case "$endpoint" in
+        unix://*) printf '%s' "${endpoint#unix://}" ;;
+        *)        printf '' ;;   # tcp:// or ssh:// — not a bind-mountable socket
+    esac
+}
+
+SOCK=$(resolve_socket)
+[ -n "$SOCK" ] || die "The active docker context does not use a unix socket.
+
+The console needs a bind-mountable socket to drive the daemon. Switch to a
+local context with:  docker context use default"
+[ -S "$SOCK" ] || die "Docker socket not found at: $SOCK
+
+The daemon appears to be stopped. Start OrbStack (or Docker Desktop) and retry."
+
+docker info >/dev/null 2>&1 || die 'Cannot reach the Docker daemon.
+
+Start OrbStack (or Docker Desktop) and retry. The console cannot do anything
+useful until the daemon is running.'
+
+# --- host timezone ------------------------------------------------------------
+#
+# The TeamCity agent image hardcodes TZ="Europe/London". Left alone, every build
+# timestamp is wrong. Pass the host zone through so containers agree with the
+# machine the user is looking at.
+
+# Three sources, because no single one is present everywhere: $TZ when the user
+# has set it, /etc/timezone on Debian and most WSL distributions, and the
+# /etc/localtime symlink on macOS and systemd Linux. WSL frequently has
+# /etc/localtime as a *copy* rather than a symlink, which is why the readlink
+# route alone silently produced UTC there.
+host_tz() {
+    if [ -n "${TZ:-}" ]; then printf '%s' "$TZ"; return; fi
+
+    if [ -r /etc/timezone ]; then
+        zone=$(head -1 /etc/timezone 2>/dev/null | tr -d '[:space:]')
+        [ -n "$zone" ] && { printf '%s' "$zone"; return; }
+    fi
+
+    if [ -L /etc/localtime ]; then
+        zone=$(readlink /etc/localtime)
+        case "$zone" in
+            */zoneinfo/*) printf '%s' "${zone##*/zoneinfo/}"; return ;;
+        esac
+    fi
+
+    printf 'UTC'
+}
+
+# macOS ships `shasum` (Perl); Linux coreutils ships sha256sum/sha1sum and may
+# have no Perl at all. Any of them will do — the hash only has to be stable
+# within one machine.
+hash_stdin() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum
+    elif command -v shasum   >/dev/null 2>&1; then shasum
+    elif command -v sha1sum  >/dev/null 2>&1; then sha1sum
+    elif command -v md5sum   >/dev/null 2>&1; then md5sum
+    else cksum
+    fi
+}
+
+HOST_TZ=$(host_tz)
+
+# --- build the console image when its contents change -------------------------
+#
+# Tagged by a content hash rather than a timestamp: mtimes are not preserved by
+# clones or archives, so `find -newer` would rebuild at random or — worse — fail
+# to rebuild after a real edit.
+
+# `sort -z` is not in busybox sort, so the file list is sorted as ordinary lines
+# under a fixed collation. Filenames here are plain ASCII by construction.
+console_hash() {
+    find "$ROOT/console" -type f 2>/dev/null \
+        | LC_ALL=C sort \
+        | while IFS= read -r f; do
+              printf '%s ' "$f"
+              hash_stdin <"$f"
+          done \
+        | hash_stdin \
+        | cut -c1-12
+}
+
+HASH=$(console_hash)
+TAG="$IMAGE_NAME:$HASH"
+
+if ! docker image inspect "$TAG" >/dev/null 2>&1; then
+    note "Building console image ($HASH), this happens once per change…"
+    docker build --quiet --tag "$TAG" --tag "$IMAGE_NAME:latest" "$ROOT/console" >/dev/null \
+        || die 'Console image build failed. Re-run with:  docker build console'
+
+    # Drop tags from previous content hashes. Without this, every edit to
+    # console/ leaves another tag behind and `docker images` fills up with them.
+    docker images --format '{{.Repository}}:{{.Tag}}' \
+        | grep "^$IMAGE_NAME:" \
+        | grep -v -e ":$HASH\$" -e ':latest$' \
+        | while IFS= read -r stale; do docker rmi "$stale" >/dev/null 2>&1 || true; done
+fi
+
+# --- run ----------------------------------------------------------------------
+#
+# -t only when there is a real terminal on both ends, so `./tc status | jq`
+# does not die with "the input device is not a TTY".
+
+if [ -t 0 ] && [ -t 1 ]; then TTY='-it'; else TTY='-i'; fi
+
+exec docker run $TTY --rm --init \
+    --add-host host.docker.internal:host-gateway \
+    -v "$SOCK":/var/run/docker.sock \
+    -v "$ROOT":"$ROOT" \
+    -w "$ROOT" \
+    -e TC_ROOT="$ROOT" \
+    -e TZ="$HOST_TZ" \
+    -e TERM="${TERM:-xterm-256color}" \
+    -e COLORTERM="${COLORTERM:-}" \
+    -e NO_COLOR="${NO_COLOR:-}" \
+    "$TAG" "$@"

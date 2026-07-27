@@ -1,0 +1,20 @@
+# Real configuration and credentials. stack/.env.example is tracked and holds
+# only placeholders; stack/.env is the live one and must never be committed.
+stack/.env
+stack/.env.*
+!stack/.env.example
+stack/.secrets
+stack/.lock
+stack/docker-compose.yml
+
+# Backups and diagnostics bundles are local artifacts, often large.
+backups/*
+!backups/.gitkeep
+
+# An unpacked TeamCity distribution used to live here. The stack now runs from
+# the official images, so a re-downloaded copy should never be committed.
+src/
+
+.DS_Store
+logs/*
+!logs/.gitkeep

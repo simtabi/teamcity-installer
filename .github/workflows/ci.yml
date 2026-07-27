@@ -1,0 +1,85 @@
+# CI needs no setup steps.
+#
+# Every tool the checks require — bash, shellcheck, bats, jq, the docker CLI —
+# lives in the console image, which ./tc builds on demand. The runner only has
+# to provide Docker, which GitHub's ubuntu image already does. That is the same
+# property that keeps the tool off a developer's machine, paying off again here.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly, so image drift and TeamCity releases surface without anyone
+    # having to remember to check.
+    - cron: '0 4 * * 1'
+
+jobs:
+  check:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Static analysis over the launcher, the console library, the test helper
+      # and the datadir seeder.
+      - name: Lint
+        run: ./tc lint
+
+      # 54 bats cases. Pure: docker and the network are stubbed, so this needs
+      # neither a stack nor internet access.
+      - name: Unit tests
+        run: ./tc test
+
+  e2e:
+    name: End-to-end against a real stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Pulls ~4 GB of TeamCity images, so it is not run on every push.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure an ephemeral stack
+        run: |
+          mkdir -p stack
+          {
+            echo "TC_STACK='ci'"
+            echo "TC_VERSION='2026.1.3'"
+            echo "TC_PORT='8111'"
+            echo "TC_TZ='UTC'"
+            echo "TC_DB='postgres'"
+            echo "TC_PG_VERSION='17'"
+            echo "TC_PG_DB='teamcity'"
+            echo "TC_PG_USER='teamcity'"
+            echo "TC_PG_PASSWORD='$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9._-' | cut -c1-32)'"
+            echo "TC_JDBC_VERSION='42.7.13'"
+            echo "TC_MEM_OPTS='-Xmx2g'"
+            echo "TC_AGENTS='1'"
+            echo "TC_AGENT_IMAGE='minimal'"
+            echo "TC_AGENT_DOCKER='none'"
+            echo "COMPOSE_PROJECT_NAME='ci'"
+          } > stack/.env
+          chmod 600 stack/.env
+
+      - name: Start
+        run: ./tc up
+
+      # Asserts the things only a running stack can prove: volumes actually
+      # mapped, timezone actually applied, database actually seeded.
+      - name: Verify
+        run: ./tc verify
+
+      - name: Backup round-trip
+        run: ./tc backup cold
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: ./tc doctor || true
+
+      - name: Tear down
+        if: always()
+        run: printf 'ci\n' | ./tc reset || true

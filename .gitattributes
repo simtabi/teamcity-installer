@@ -1,0 +1,9 @@
+# Shell scripts must keep LF endings: a CRLF checkout on Windows breaks the
+# shebang, and the failure ("bad interpreter") does not mention line endings.
+* text=auto eol=lf
+*.sh    text eol=lf
+*.bats  text eol=lf
+tc      text eol=lf
+Makefile text eol=lf
+*.png binary
+*.jar binary

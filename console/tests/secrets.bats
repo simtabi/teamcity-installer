@@ -1,0 +1,79 @@
+#!/usr/bin/env bats
+#
+# Secret hygiene in the repository itself.
+#
+# This file exists because a real credential reached a public commit. The test
+# fixture held a 24-character truncation of a live database password, and the
+# pre-publication scan searched for the *whole* 32-character value — so a prefix
+# never matched. A secret scanner caught it after the fact.
+#
+# The lesson is that "grep for the secret you know about" is the wrong shape of
+# check. These assert the properties instead: fixtures must be self-evidently
+# fake, and only the example env file may be tracked.
+
+load helper
+
+setup() {
+    PROJECT="${TC_ROOT:?TC_ROOT must be set — run through ./tc}"
+    [ -d "$PROJECT" ] || skip 'project not reachable'
+}
+
+@test "no tracked file carries a high-entropy credential literal" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+
+    # Only files git actually tracks. The live stack/.env holds a real password
+    # by design and is ignored; scanning the working tree instead of the index
+    # would flag it forever and train everyone to ignore this test.
+    local hits
+    hits=$(git ls-files -z | xargs -0 grep -InE "(PASSWORD|TOKEN|SECRET)[A-Z_]*=['\"][^'\"]{12,}['\"]" 2>/dev/null \
+           | grep -vE 'example|placeholder|not-a-real|redacted|fake|dummy|000000' \
+           | grep -v '\$' || true)   # a value containing $ is a reference, not a literal
+
+    [ -z "$hits" ] || { echo "possible credential literal:"; echo "$hits"; return 1; }
+}
+
+@test "the example env file ships no filled-in credentials" {
+    local example="$PROJECT/stack/.env.example"
+    [ -f "$example" ]
+
+    # Every secret-ish key must be present but empty.
+    local key
+    for key in TC_PG_PASSWORD TC_AGENT_AUTH_TOKEN; do
+        grep -qE "^$key=''\$" "$example" \
+            || { echo "$key in .env.example is not empty"; return 1; }
+    done
+}
+
+@test "the live env file is ignored, and near-miss names too" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+    git check-ignore -q stack/.env      || { echo 'stack/.env is not ignored'; return 1; }
+    git check-ignore -q stack/.secrets  || { echo 'stack/.secrets is not ignored'; return 1; }
+    # A stray copy is the classic accident.
+    git check-ignore -q stack/.env.local || { echo 'stack/.env.local would be tracked'; return 1; }
+    git check-ignore -q stack/.env.bak   || { echo 'stack/.env.bak would be tracked'; return 1; }
+}
+
+@test "the example env file is NOT ignored — it is meant to be tracked" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+    run git check-ignore -q stack/.env.example
+    [ "$status" -ne 0 ]
+}
+
+@test "no real env file is tracked by git" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+    local tracked
+    tracked=$(git ls-files 'stack/.env*' | grep -v '\.env\.example$' || true)
+    [ -z "$tracked" ] || { echo "tracked env files: $tracked"; return 1; }
+}
+
+@test "logs and backups are never tracked" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+    local tracked
+    tracked=$(git ls-files 'logs/*.log' 'backups/teamcity-*' || true)
+    [ -z "$tracked" ] || { echo "tracked runtime artifacts: $tracked"; return 1; }
+}

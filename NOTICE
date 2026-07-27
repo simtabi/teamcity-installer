@@ -1,0 +1,17 @@
+NOTICE
+======
+
+teamcity-installer — copyright (c) 2026 Simtabi.
+Author: Imani Manyara.
+
+TeamCity is a trademark of JetBrains s.r.o.
+
+This project is not affiliated with, endorsed by, or sponsored by JetBrains. It
+redistributes no JetBrains software: it orchestrates the official public Docker
+images and downloads the PostgreSQL JDBC driver (BSD-2-Clause) from Maven
+Central at runtime. Your use of TeamCity itself remains governed by JetBrains'
+licence terms:
+
+    https://www.jetbrains.com/legal/docs/teamcity/license/
+
+The project name uses "TeamCity" descriptively, to say what the tool installs.
