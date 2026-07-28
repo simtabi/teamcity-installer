@@ -103,3 +103,19 @@ setup() {
     run grep -nE 'log::[a-z]+ .*\$pass' console/lib/admin.sh
     [ "$status" -ne 0 ]
 }
+
+# --- git must work against the bind-mounted checkout ---------------------------
+#
+# The console runs as root inside the container against a directory owned by the
+# user outside it, which git rejects as "dubious ownership". That failed only in
+# CI — the local checkout happened to be configured around it — so every push
+# was red while `make check` was green. The image declares the directory safe.
+
+@test "git operates on the mounted repository without an ownership complaint" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "${PROJECT_ROOT:?}"
+
+    run git status --porcelain
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    [[ $output != *"dubious ownership"* ]]
+}

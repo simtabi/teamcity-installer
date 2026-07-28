@@ -42,7 +42,15 @@ RUN chmod +x /app/lib/*.sh
 
 # Quiet the "gum is running in a non-interactive terminal" heuristics and keep
 # colour behaviour predictable across OrbStack / Docker Desktop / plain Linux.
+# The console always runs git against a bind-mounted directory it does not own —
+# root inside the container, the user's uid outside — which git refuses as
+# "dubious ownership". That is inherent to the design, not a symptom, so declare
+# it safe rather than making every caller work around it. Via environment
+# variables so no config file has to be written into the image.
 ENV TERM=xterm-256color \
-    TC_CONSOLE=1
+    TC_CONSOLE=1 \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=safe.directory \
+    GIT_CONFIG_VALUE_0=*
 
 ENTRYPOINT ["/app/lib/main.sh"]
