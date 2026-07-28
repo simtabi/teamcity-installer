@@ -37,16 +37,15 @@ default and easy to miss: the agents are visibly present and nothing runs.
 
 **Agents → Authorize**, or `./tc authorize`.
 
-The first run asks for a REST **access token**. This is not the super user token from first-run
-setup — that one is for the browser and rotates on every restart. This one is created by you and
-persists:
+**No access token is needed.** The console authenticates with the super user token, which it
+already reads from the server log, over basic auth with an empty username. That matters on a fresh
+install: creating an access token requires an administrator account, and requiring an account
+before you can authorize the agents that let you build anything is a chicken-and-egg worth avoiding.
 
-1. In TeamCity, click your name (top right) → **Access Tokens** → **Create access token**.
-2. Give it permission to manage agents.
-3. Paste it when prompted.
-
-The token is verified against the live server before being stored in `stack/.secrets` (mode 600).
-If it later stops working the console says so and asks again rather than failing obscurely.
+If you would rather use a personal access token — for an audit trail, or because the super user
+token rotates on every restart — create one under **your profile → Access Tokens** and the console
+will prefer it. It is verified against the live server before being stored in `stack/.secrets`
+(mode 600), never in `.env`.
 
 Under the hood it lists `GET /app/rest/agents?locator=authorized:false` and `PUT`s to
 `/app/rest/agents/id:<n>/authorizedInfo`, falling back to `/authorized` if the server rejects the

@@ -36,15 +36,38 @@ agents::_rest_base() {
     printf '%s' "$TC_REST_BASE"
 }
 
+# Credentials for a REST call, in preference order.
+#
+# A personal access token if one is stored — but the super user token works too,
+# over basic auth with an empty username, and it is already on disk in the
+# server's log. That matters most on a fresh install: creating an access token
+# needs an administrator account, and needing an account to authorize the agents
+# that let you build anything is a chicken-and-egg the console can simply avoid.
+agents::_auth_args() {
+    local token
+    if token=$(conf::token 2>/dev/null) && [[ -n $token ]]; then
+        printf '%s\n' --header "Authorization: Bearer $token"
+        return 0
+    fi
+    if token=$(stack::super_user_token 2>/dev/null) && [[ -n $token ]]; then
+        printf '%s\n' --user ":$token"
+        return 0
+    fi
+    return 2
+}
+
 # agents::_rest <method> <path> [body] [content-type]
 agents::_rest() {
     local method=$1 path=$2 body=${3:-} ctype=${4:-application/json}
-    local token; token=$(conf::token) || return 2
+
+    local -a auth=()
+    mapfile -t auth < <(agents::_auth_args) || return 2
+    (( ${#auth[@]} > 0 )) || return 2
 
     local -a args=(
         --silent --show-error --fail --max-time "${TC_REST_TIMEOUT:-20}"
         --request "$method"
-        --header "Authorization: Bearer $token"
+        "${auth[@]}"
         --header 'Accept: application/json'
     )
     [[ -n $body ]] && args+=(--header "Content-Type: $ctype" --data "$body")
@@ -52,12 +75,17 @@ agents::_rest() {
     curl "${args[@]}" "$(agents::_rest_base)$path"
 }
 
-# Prompts for a token, verifies it against the live server, and stores it.
+# Ensures the console can reach the REST API, asking for an access token only
+# when it genuinely has no other way in.
 agents::ensure_token() {
+    if agents::_rest GET /app/rest/server >/dev/null 2>&1; then
+        return 0
+    fi
+
     if conf::token >/dev/null 2>&1; then
-        if agents::_rest GET /app/rest/server >/dev/null 2>&1; then return 0; fi
         ui::warn 'The stored access token no longer works.'
         conf::clear_token
+        agents::_rest GET /app/rest/server >/dev/null 2>&1 && return 0
     fi
 
     if ! stack::server_ready; then

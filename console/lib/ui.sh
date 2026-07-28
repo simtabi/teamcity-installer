@@ -195,7 +195,20 @@ ui::ask() {
     while true; do
         if ui::plain; then
             printf '%s [%s]: ' "$prompt" "$default" >&2
-            read -r value
+            # An exhausted stdin must end the prompt, not restart it. Without
+            # this, a piped or redirected run spins here forever: read fails,
+            # the value is empty, the validator rejects it, and round it goes.
+            if ! read -r value; then
+                if [[ -z $default ]]; then
+                    ui::blank
+                    ui::err "No input available for: $prompt"
+                    return 1
+                fi
+                value=$default
+                printf '%s\n' "$value" >&2
+                printf '%s' "$value"
+                return 0
+            fi
         else
             value=$(gum input \
                 --prompt "$(printf '%s ' "$prompt")" \
@@ -222,7 +235,16 @@ ui::secret() {
     while true; do
         if ui::plain; then
             printf '%s (hidden, enter to accept generated): ' "$prompt" >&2
-            read -rs value; printf '\n' >&2
+            if ! read -rs value; then
+                printf '\n' >&2
+                if [[ -z $default ]]; then
+                    ui::err "No input available for: $prompt"
+                    return 1
+                fi
+                printf '%s' "$default"
+                return 0
+            fi
+            printf '\n' >&2
         else
             value=$(gum input --password \
                 --prompt "$(printf '%s ' "$prompt")" \

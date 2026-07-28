@@ -241,12 +241,8 @@ verify::_rest() {
         return
     fi
 
-    if ! conf::token >/dev/null 2>&1; then
-        verify::_skip 'REST API reachable' 'no access token stored'
-        verify::_why 'Store one with: ./tc authorize'
-        verify::_skip 'agents authorized' 'needs an access token'
-        return
-    fi
+    # No need to insist on a stored access token: agents::_rest falls back to
+    # the super user token, which is already readable from the server log.
 
     local server_json
     if server_json=$(agents::_rest GET /app/rest/server 2>/dev/null); then

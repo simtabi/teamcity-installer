@@ -105,7 +105,7 @@ main::_agent_summary() {
     fi
 
     local summary=''
-    if conf::token >/dev/null 2>&1; then
+    if true; then
         local json
         if json=$(TC_REST_TIMEOUT=3 agents::_rest GET \
                 '/app/rest/agents?locator=defaultFilter:false&fields=count,agent(authorized)' 2>/dev/null); then

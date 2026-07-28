@@ -75,16 +75,12 @@ That is all. TeamCity is now usable.
 Your three agents have connected but are not yet authorized, so they will not take builds. This is
 TeamCity's default and is easy to miss — the agents look present but nothing runs.
 
-First create an **access token** so the console can act on your behalf. This is a *different* token
-from the super user one above — see [the two tokens](#the-two-tokens) if that is confusing:
+One command, and no token to create — the console authenticates with the super user token it
+already reads from the log:
 
-1. In TeamCity, click your name (top right) → **Access Tokens** → **Create access token**.
-2. Give it permission to manage agents.
-3. Copy it.
-
-Then in the console: **Agents → Authorize**. Paste the token when asked; it is verified against the
-live server before being stored in `stack/.secrets`. The console lists the pending agents and
-authorizes them.
+```sh
+./tc authorize
+```
 
 ```
 ok     authorized teamcity-agent-1

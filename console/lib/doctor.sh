@@ -97,11 +97,6 @@ doctor::_agents() {
     ui::blank
     ui::info 'Agents'
 
-    if ! conf::token >/dev/null 2>&1; then
-        ui::note "  configured: $TC_AGENTS  (store an access token to see server-side state)"
-        return
-    fi
-
     local json
     json=$(agents::_rest GET '/app/rest/agents?locator=defaultFilter:false&fields=count,agent(connected,authorized)' 2>/dev/null) \
         || { ui::note '  REST unavailable'; return; }
