@@ -142,8 +142,7 @@ stack::_await_ready() {
                     stack::show_super_user_token
                     return 0
                 fi
-                setup_seen=$(( setup_seen + 5 ))
-                ui::waiting "$setup_seen" 'starting up' ;;
+                setup_seen=$(( setup_seen + 5 )) ;;
             *) setup_seen=0 ;;
         esac
 
@@ -159,6 +158,8 @@ stack::_await_ready() {
 
         sleep 5
         waited=$(( waited + 5 ))
+        # One heartbeat, not two: the transient-maintenance counter used to
+        # report alongside this and every wait printed a duplicate line.
         ui::waiting "$waited" 'waiting for TeamCity'
     done
 

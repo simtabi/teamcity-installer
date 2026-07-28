@@ -99,6 +99,29 @@ state that matches neither.
 > volume carries its own copy, both in plaintext. `config.env` alongside them is the same
 > configuration in restorable form. Treat `backups/` as secret material; it is gitignored.
 
+## What each restore actually does
+
+**Cold** — stops the stack, wipes each volume, untars the archive over it.
+
+**Logical** — restores the data directory from `datadir.tgz`, drops the PostgreSQL volume so the
+database starts empty, then replays `database.dump` with `pg_restore`.
+
+**Native** — hands the archive to TeamCity's own `maintainDB`, which has three preconditions the
+console now satisfies for you:
+
+1. The data directory's `config/` must be **empty**. It refuses to overwrite an existing
+   configuration.
+2. The target database settings file must exist **outside** that directory — which is why the
+   console stages a `database.properties` on a separate mount. Putting it in the data directory is
+   what makes `config/` non-empty, so the obvious approach is circular.
+3. The target database must have **no tables**. The console drops and recreates the schema.
+
+The JDBC driver is preserved through the wipe, since `maintainDB` needs it to reach PostgreSQL at
+all.
+
+All three were verified end to end against a live stack: user account, three authorized agents and
+153 tables came back in each case.
+
 ## Credentials after a restore
 
 An archive carries its own database credentials inside the restored

@@ -119,3 +119,41 @@ manifest() {
     backup::_realign_db_password
     [ "${SAVED:-0}" = 0 ]
 }
+
+# --- the native restore has three preconditions --------------------------------
+#
+# maintainDB refuses to run unless: the data directory's config/ is empty, the
+# target database settings file exists *outside* that directory, and the target
+# database has no tables. Each was discovered by hitting it, and the first two
+# are circular — it needs a database.properties to know where to restore, and
+# putting one in the data directory is what makes config/ non-empty.
+
+@test "the target database settings live outside the data directory" {
+    # -T must not point into the data directory, or config/ is never empty.
+    run grep -oE '\-T [^ ]+' "$LIB/backup.sh"
+    [ "$status" -eq 0 ]
+    [[ $output != *"/data/teamcity_server/datadir"* ]] \
+        || { echo "-T points inside the data directory: $output"; return 1; }
+}
+
+@test "the staging directory is under the project, not the container's /tmp" {
+    # Bind-mount sources are resolved by the daemon on the host; a path from the
+    # console's own mktemp does not exist there and mounts as empty.
+    grep -q 'BACKUP_DIR/.restore-staging' "$LIB/backup.sh"
+    run grep -n 'staging=$(mktemp -d)$' "$LIB/backup.sh"
+    [ "$status" -ne 0 ]
+}
+
+@test "the native restore clears the data directory and the database first" {
+    local fn; fn=$(sed -n '/^backup::_restore_native/,/^}/p' "$LIB/backup.sh")
+    [[ $fn == *"find /d -mindepth 1 -delete"* ]] || { echo 'data directory is not cleared'; return 1; }
+    [[ $fn == *'DROP SCHEMA'* ]]                 || { echo 'target database is not cleared'; return 1; }
+    # …but keeps the driver it needs to reach PostgreSQL at all.
+    [[ $fn == *'postgresql-*.jar'* ]]            || { echo 'JDBC driver is not preserved'; return 1; }
+}
+
+@test "restored volumes are labelled so Compose does not disown them" {
+    grep -q 'com.docker.compose.project' "$LIB/backup.sh"
+    run grep -n 'docker volume create "' "$LIB/backup.sh"
+    [ "$status" -ne 0 ]
+}

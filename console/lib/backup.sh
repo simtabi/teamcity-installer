@@ -126,6 +126,20 @@ backup::_tar_volume() {
         tar czf "/out/$target" -C /src . 2>/dev/null
 }
 
+# Volumes are labelled as Compose's own when created here. Without the labels
+# Compose prints "volume … already exists but was not created by Docker Compose"
+# for every one of them — 29 warnings in the middle of a restore, none of them
+# actionable.
+backup::_create_volume() {
+    local volume=$1
+    docker volume inspect "$volume" >/dev/null 2>&1 && return 0
+    docker volume create \
+        --label com.docker.compose.project="$TC_STACK" \
+        --label com.docker.compose.volume="${volume#"${TC_STACK}_"}" \
+        --label com.docker.compose.version="$(docker compose version --short 2>/dev/null || echo 2)" \
+        "$volume" >/dev/null 2>&1
+}
+
 backup::_untar_volume() {
     local volume=$1 archive=$2
     # Wipe first: untarring over existing content merges two states and produces
@@ -539,7 +553,7 @@ backup::_restore_cold() {
     for short in "${volumes[@]}"; do
         vol="${TC_STACK}_${short}"
         [[ -f "$dir/$short.tgz" ]] || { ui::warn "missing $short.tgz, skipping"; continue; }
-        docker volume create "$vol" >/dev/null 2>&1 || true
+        backup::_create_volume "$vol"
         if BACKUP_DIR="$dir" backup::_untar_volume "$vol" "$short.tgz"; then
             ui::note "  restored $short"
         else
@@ -553,7 +567,7 @@ backup::_restore_logical() {
     local dir=$1
 
     local vol; vol=$(conf::volume datadir)
-    docker volume create "$vol" >/dev/null 2>&1 || true
+    backup::_create_volume "$vol"
     BACKUP_DIR="$dir" backup::_untar_volume "$vol" 'datadir.tgz' \
         || { ui::err 'Could not restore the data directory.'; return 1; }
     ui::note '  restored datadir'
@@ -591,25 +605,84 @@ backup::_restore_native() {
     ui::note 'This runs maintainDB inside the server image, with the database up'
     ui::note 'and the server stopped.'
 
-    docker volume create "$(conf::volume datadir)" >/dev/null 2>&1 || true
-    ui::spin 'Starting the database' -- stack::compose up --detach db
-    sleep 8
+    # maintainDB refuses to restore into a data directory whose config/ is not
+    # empty — it will not overwrite an existing configuration. That makes the
+    # obvious approach circular: it also needs a database.properties to know
+    # which database to restore *into*, and pointing -T at a file inside the
+    # data directory is precisely what makes config/ non-empty.
+    #
+    # So the target configuration lives outside the data directory, on its own
+    # mount, and the data directory is emptied first except for the JDBC driver
+    # that maintainDB needs to reach PostgreSQL at all.
+    local vol; vol=$(conf::volume datadir)
+    backup::_create_volume "$vol"
 
-    # maintainDB needs the archive visible inside the container.
-    if ! docker run --rm \
+    # Under the project directory, not /tmp. Bind-mount sources are resolved by
+    # the *daemon*, on the host — a path from the console container's own mktemp
+    # does not exist there, and the mount silently produces an empty directory.
+    local staging="$BACKUP_DIR/.restore-staging-$$"
+    mkdir -p "$staging" || return 1
+    printf 'connectionUrl=jdbc:postgresql://db:5432/%s\nconnectionProperties.user=%s\nconnectionProperties.password=%s\n' \
+        "$TC_PG_DB" "$TC_PG_USER" "$TC_PG_PASSWORD" >"$staging/database.properties"
+
+    ui::info 'Clearing the data directory, keeping only the JDBC driver…'
+    if ! docker run --rm -v "$vol":/d alpine:3.22 sh -c '
+            mkdir -p /tmp/keep
+            cp /d/lib/jdbc/postgresql-*.jar /tmp/keep/ 2>/dev/null || true
+            find /d -mindepth 1 -delete
+            mkdir -p /d/lib/jdbc
+            cp /tmp/keep/*.jar /d/lib/jdbc/ 2>/dev/null || true
+            chown -R 1000:1000 /d' >/dev/null 2>&1
+    then
+        ui::err 'Could not prepare the data directory.'
+        rm -rf "$staging"
+        return 1
+    fi
+
+    ui::spin 'Starting the database' -- stack::compose up --detach db
+
+    ui::info 'Waiting for the database…'
+    local waited=0
+    while (( waited < 120 )); do
+        stack::compose exec -T db pg_isready -U "$TC_PG_USER" >/dev/null 2>&1 && break
+        sleep 3; waited=$(( waited + 3 ))
+        ui::waiting "$waited" 'waiting for the database'
+    done
+
+    # maintainDB also refuses a target database that already has tables. A
+    # restore replaces the database by definition — the stack name has already
+    # been typed to confirm that — so clear the schema rather than leaving the
+    # command to fail on a precondition the caller cannot see.
+    ui::info 'Clearing the target database…'
+    if ! stack::compose exec -T db psql -U "$TC_PG_USER" -d "$TC_PG_DB" -q \
+            -c 'DROP SCHEMA IF EXISTS public CASCADE;' \
+            -c 'CREATE SCHEMA public;' \
+            -c "GRANT ALL ON SCHEMA public TO \"$TC_PG_USER\";" >/dev/null 2>&1
+    then
+        ui::err 'Could not clear the target database.'
+        rm -rf "$staging"
+        return 1
+    fi
+
+    local rc=0
+    docker run --rm \
         --network "${TC_STACK}_default" \
         --user 1000:1000 \
-        --volume "$(conf::volume datadir)":/data/teamcity_server/datadir \
+        --volume "$vol":/data/teamcity_server/datadir \
         --volume "$dir":/restore:ro \
+        --volume "$staging":/target:ro \
         --entrypoint /opt/teamcity/bin/maintainDB.sh \
         "jetbrains/teamcity-server:$TC_VERSION" \
         restore -A /data/teamcity_server/datadir \
                 -F "/restore/$(basename "$archive")" \
-                -T /data/teamcity_server/datadir/config/database.properties
-    then
+                -T /target/database.properties || rc=$?
+
+    rm -rf "$staging"
+
+    if (( rc != 0 )); then
         ui::err 'maintainDB restore failed.'
-        ui::note 'The archive may predate this TeamCity version, or the data'
-        ui::note 'directory may already contain a configuration it will not overwrite.'
+        ui::note 'The archive may predate this TeamCity version, or the target'
+        ui::note 'database may be unreachable. The maintainDB output is above.'
         return 1
     fi
 
