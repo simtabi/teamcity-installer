@@ -88,6 +88,10 @@ The bats suite is the migration spec: a port is done when it passes the same cas
 
 ## Smaller things, no version bump needed
 
+- **Running the suite on a real Linux host and under WSL 2.** Today their support rests on
+  portability tests rather than execution, and that gap is stated wherever the platforms are
+  claimed. Closing it is the single highest-value contribution someone else could make.
+
 - TeamCity multi-node — would likely trip trigger 4 on its own.
 - `./tc verify` gaining coverage as more of the surface becomes automatable.
 - A CI workflow running `./tc lint` and `./tc test` on every change, and `./tc verify`

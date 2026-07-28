@@ -5,7 +5,11 @@
 
 > A containerized control console that installs, runs, backs up and upgrades a local JetBrains TeamCity stack without installing anything on your machine.
 
-Requires Docker (OrbStack or Docker Desktop) with the Compose v2 plugin. Runs on macOS (Apple Silicon and Intel), Linux, and Windows via WSL 2.
+Requires Docker (OrbStack or Docker Desktop) with the Compose v2 plugin.
+
+> **Tested on macOS/arm64 only.** Linux and Windows via WSL 2 are expected to work — the launcher
+> uses no tool or flag that is missing there, and tests assert those absences — but neither has been
+> run on a real host. See [platforms](docs/platforms.md); reports from either are welcome.
 
 ## Install
 
@@ -45,7 +49,7 @@ account for you, since a started server with no accounts is one nobody can sign 
 - [Architecture](docs/architecture.md) — how the pieces fit, and why the console is containerized
 - [Changelog](CHANGELOG.md) — what changed, and when
 - [Roadmap](docs/roadmap.md) — what v2 would be, and the triggers that would justify it
-- [Platforms](docs/platforms.md) — macOS, Linux and WSL, and the limits of what has been tested
+- [Platforms](docs/platforms.md) — macOS, Linux and WSL, and exactly what has and has not been run
 - [Publishing](docs/publishing.md) — the open-source position, and what is left before a first push
 - [Release](docs/release.md) — the pinned TeamCity version and how to move it
 
