@@ -32,7 +32,7 @@ BACKUP_DIR="$TC_ROOT/backups"
 : "${TC_AGENT_DOCKER:=none}"
 : "${TC_TZ:=${TZ:-UTC}}"
 : "${TC_JDBC_VERSION:=42.7.13}"
-: "${TC_AGENT_AUTO_AUTHORIZE:=1}"
+: "${TC_AGENT_AUTO_AUTHORIZE:=0}"
 : "${TC_AGENT_AUTH_TOKEN:=}"
 : "${TC_BACKUP_KEEP:=5}"
 : "${TC_LOG_LEVEL:=INFO}"
@@ -106,8 +106,9 @@ TC_PG_USER=$(conf::_quote "$TC_PG_USER")
 TC_PG_PASSWORD=$(conf::_quote "$TC_PG_PASSWORD")
 TC_JDBC_VERSION=$(conf::_quote "$TC_JDBC_VERSION")
 
-# Shared secret that lets agents authorize themselves on first connect. Empty
-# disables the feature; see docs/tools/agents.md for what it bypasses.
+# Retained so an existing stack.env still parses. The mechanism does not work on
+# TeamCity 2026.1.3 — see console/lib/agents.sh — so these stay empty and agents
+# are authorized explicitly.
 TC_AGENT_AUTO_AUTHORIZE=$(conf::_quote "$TC_AGENT_AUTO_AUTHORIZE")
 TC_AGENT_AUTH_TOKEN=$(conf::_quote "$TC_AGENT_AUTH_TOKEN")
 

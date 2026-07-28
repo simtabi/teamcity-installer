@@ -20,14 +20,6 @@ wizard::run() {
     wizard::_ask_resources
     wizard::_ask_agents
 
-    # One secret per stack, generated once and reused on reconfigure so agents
-    # already holding it stay authorized.
-    if [[ $TC_AGENT_AUTO_AUTHORIZE == 1 && -z $TC_AGENT_AUTH_TOKEN ]]; then
-        TC_AGENT_AUTH_TOKEN=$(validate::gen_password)
-    elif [[ $TC_AGENT_AUTO_AUTHORIZE != 1 ]]; then
-        TC_AGENT_AUTH_TOKEN=''
-    fi
-
     wizard::_summary || { ui::note 'Nothing was written.'; return 1; }
 
     conf::save
@@ -155,17 +147,6 @@ wizard::_ask_agents() {
         'Minimal|JRE only; you install build tools yourself') || return 1
     TC_AGENT_IMAGE=$([[ $image == Minimal ]] && echo minimal || echo full)
 
-    if ui::confirm 'Authorize agents automatically when they connect?' yes; then
-        TC_AGENT_AUTO_AUTHORIZE=1
-        ui::note 'Agents will authorize themselves with a shared secret, so they'
-        ui::note 'can take builds immediately instead of waiting in Unauthorized.'
-        ui::note 'This bypasses a step TeamCity normally puts behind a login, so'
-        ui::note 'it suits a localhost stack rather than a public server.'
-    else
-        TC_AGENT_AUTO_AUTHORIZE=0
-        ui::note 'Agents will need approving via  Agents → Authorize.'
-    fi
-
     local docker_mode
     docker_mode=$(ui::menu 'Can agents run Docker builds?' \
         'No|simplest and safest' \
@@ -206,8 +187,7 @@ wizard::_summary() {
         *)      docker_line='no Docker access' ;;
     esac
     agent_line="$TC_AGENTS × $TC_AGENT_IMAGE, $docker_line"
-    local auth_line='manual approval via Agents → Authorize'
-    [[ $TC_AGENT_AUTO_AUTHORIZE == 1 ]] && auth_line='automatic on first connect'
+    local auth_line='via Agents → Authorize, once the server is set up'
 
     # Tab-delimited, not comma: two of these values contain commas ("… db 'x',
     # user 'y'" and "3 × full, no Docker access"), and a comma separator split
@@ -235,10 +215,6 @@ wizard::_next_steps() {
     ui::note '   accept the licence, then create the administrator account.'
     [[ $TC_DB == postgres ]] \
         && ui::note '   The database step is already done and will not be shown.'
-    if [[ $TC_AGENT_AUTO_AUTHORIZE == 1 ]]; then
-        ui::note '2. Nothing else — the agents authorize themselves and are ready to build.'
-    else
-        ui::note '2. Come back here and run  Agents → Authorize  so your agents'
-        ui::note '   can start taking builds.'
-    fi
+    ui::note '2. Come back here and run  Agents → Authorize  so your agents'
+    ui::note '   can start taking builds.'
 }

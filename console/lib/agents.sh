@@ -206,6 +206,26 @@ agents::_authorize_one() {
     agents::_rest PUT "/app/rest/agents/id:$id/authorized" 'true' 'text/plain' >/dev/null 2>&1
 }
 
+# --- why there is no automatic authorization ------------------------------------
+#
+# TeamCity documents an internal property, teamcity.agentAutoAuthorize.
+# authorizationToken, that is widely described as authorizing any agent
+# presenting the same value in its buildAgent.properties. It was implemented
+# here and it does not work on 2026.1.3:
+#
+#   * The server reads the property — it appears in the startup log — and agents
+#     presenting the matching token still register as Unauthorized.
+#   * The agent image only writes AGENT_TOKEN into buildAgent.properties when
+#     that file has no token yet, so on an existing stack the setting is
+#     accepted and silently ignored.
+#   * Rewriting the token in the conf volume to force the issue is worse: the
+#     server treats a changed token as a *different agent*, so the originals are
+#     orphaned and duplicates appear as "<name>-1".
+#
+# Rather than ship something that quietly does nothing, authorization is manual
+# and the console makes it a single action. If a future TeamCity makes the
+# property work as described, this is the place to reinstate it.
+
 # --- scale --------------------------------------------------------------------
 
 agents::scale() {

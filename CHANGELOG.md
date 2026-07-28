@@ -14,8 +14,6 @@ First public release. Pins TeamCity **2026.1.3** against the official JetBrains 
 - **Guided setup** with per-answer validation, a review screen, and no writes until you confirm.
 - **Generated compose stack** — server, PostgreSQL 17, and one explicit service per agent so each
   keeps its own configuration volume and therefore its own authorization token.
-- **Agent auto-authorization** via a shared secret, removing the last manual step of a stock
-  install. Optional, and documented for what it bypasses.
 - **Three backup tiers** — TeamCity-native, logical (`pg_dump`), and cold — with retention, a
   disk-space guard, and restore refusals for incompatible TeamCity version, database backend or
   PostgreSQL major.
@@ -41,11 +39,17 @@ tools of this kind:
 - `gum spin` execs its argument and cannot run a shell function. A pseudo-terminal test harness
   now covers the interactive branch, which behaves differently from the piped one.
 
+### Removed before release
+
+- **Agent auto-authorization.** Implemented against TeamCity's documented
+  `teamcity.agentAutoAuthorize.authorizationToken`, then removed: the server reads the property but
+  agents presenting the matching token still register as Unauthorized, and forcing the token into
+  an existing agent's configuration makes the server treat it as a different agent. Authorization
+  is explicit; see [docs/tools/agents.md](docs/tools/agents.md).
+
 ### Known limitations
 
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
-- Agent auto-authorization is wired and its configuration verified in place, but not yet confirmed
-  end to end against a fully set-up server.
 
 [0.1.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.1.0

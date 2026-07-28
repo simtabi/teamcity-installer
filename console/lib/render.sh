@@ -151,7 +151,6 @@ render::_datadir_init() {
       TC_PG_USER: \${TC_PG_USER}
       TC_PG_PASSWORD: \${TC_PG_PASSWORD}
       TC_JDBC_VERSION: \${TC_JDBC_VERSION}
-      TC_AGENT_AUTH_TOKEN: \${TC_AGENT_AUTH_TOKEN}
     volumes:
       - datadir:/data/teamcity_server/datadir
       - jdbc-cache:/cache
@@ -249,9 +248,6 @@ ${privileged}    environment:
       SERVER_URL: http://server:8111
       AGENT_NAME: ${TC_STACK}-agent-$n
       OWN_ADDRESS: ${TC_STACK}-agent-$n
-      # Matching the server's teamcity.agentAutoAuthorize.authorizationToken, so
-      # the agent authorizes itself instead of waiting in the Unauthorized list.
-      AGENT_TOKEN: \${TC_AGENT_AUTH_TOKEN}
       # The agent image hardcodes TZ=Europe/London; without this every build
       # timestamp is wrong for anyone outside that zone.
       TZ: \${TC_TZ}

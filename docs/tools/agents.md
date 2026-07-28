@@ -12,23 +12,23 @@ until the authorized count drops back within the licence. Nothing obviously fail
 stop starting — so it reads as a hang. The console refuses to render more than three agents unless
 you opt in explicitly, and warns again before authorizing past the limit.
 
-## Automatic authorization
+## Why authorization is manual
 
-By default agents authorize themselves the moment they connect, so a fresh stack is ready to build
-with no further steps. This is the one part of a TeamCity-in-Docker setup that every other tool
-leaves manual.
+TeamCity documents an internal property — `teamcity.agentAutoAuthorize.authorizationToken` — that
+is widely described as authorizing any agent presenting the same value. This project implemented
+it, then removed it, because **it does not work on TeamCity 2026.1.3**:
 
-It works through a shared secret: the console writes
-`teamcity.agentAutoAuthorize.authorizationToken` into `<datadir>/config/internal.properties`, and
-passes the same value to each agent as `AGENT_TOKEN`. An agent presenting a matching token is
-authorized on connect.
+- The server reads the property (it appears in the startup log), and agents presenting the matching
+  token still register as **Unauthorized**.
+- The agent image only writes `AGENT_TOKEN` into `buildAgent.properties` when that file has no
+  token yet, so enabling it on an existing stack is accepted and silently ignored.
+- Rewriting the token in the conf volume to force the issue makes things worse: the server treats a
+  changed token as a **different agent**, orphaning the originals and creating duplicates named
+  `<name>-1`.
 
-> This bypasses a step TeamCity normally puts behind a login. It suits a stack published on
-> localhost, which is what the wizard creates. On a server reachable from elsewhere, turn it off —
-> anything that can reach the port and knows the token could register as a build agent.
-
-Turn it off in the wizard, or set `TC_AGENT_AUTO_AUTHORIZE=0` and clear `TC_AGENT_AUTH_TOKEN` in
-`stack/.env`. The manual route below then applies.
+Shipping a setting that quietly does nothing is worse than not having it, so authorization is an
+explicit action that the console reduces to one command. If a future TeamCity makes the property
+behave as documented, `console/lib/agents.sh` records where to reinstate it.
 
 ## Authorize manually
 

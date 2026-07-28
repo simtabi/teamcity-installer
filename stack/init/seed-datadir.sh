@@ -37,35 +37,6 @@ fi
 
 mkdir -p "$JDBC_DIR" "$CONFIG_DIR"
 
-# --- agent auto-authorization --------------------------------------------------
-#
-# A server-side internal property; an agent presenting the same value in its
-# buildAgent.properties (the image exposes that as AGENT_TOKEN) is authorized on
-# connect. This removes the one step every other TeamCity-in-Docker setup leaves
-# manual — agents otherwise appear as "Unauthorized" and silently take no builds.
-#
-# It bypasses a step that is normally behind TeamCity authentication, so it suits
-# a localhost-bound stack and not a server exposed to the internet. Set
-# TC_AGENT_AUTO_AUTHORIZE=0 to turn it off.
-
-INTERNAL="$CONFIG_DIR/internal.properties"
-
-if [ -n "${TC_AGENT_AUTH_TOKEN:-}" ]; then
-    if [ -f "$INTERNAL" ] && grep -q '^teamcity.agentAutoAuthorize.authorizationToken=' "$INTERNAL"; then
-        log 'agent auto-authorization already configured'
-    else
-        log 'enabling agent auto-authorization'
-        touch "$INTERNAL"
-        # Drop any stale value before appending, so re-running is idempotent.
-        grep -v '^teamcity.agentAutoAuthorize.authorizationToken=' "$INTERNAL" > "$INTERNAL.tmp" 2>/dev/null || true
-        mv -f "$INTERNAL.tmp" "$INTERNAL" 2>/dev/null || true
-        printf 'teamcity.agentAutoAuthorize.authorizationToken=%s\n' "$TC_AGENT_AUTH_TOKEN" >> "$INTERNAL"
-        chmod 600 "$INTERNAL"
-    fi
-else
-    log 'agent auto-authorization disabled'
-fi
-
 # Everything below configures PostgreSQL; the bundled database needs none of it.
 if [ "${TC_DB:-postgres}" != 'postgres' ]; then
     log "database mode is ${TC_DB:-postgres}, skipping JDBC and database.properties"
