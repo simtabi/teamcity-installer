@@ -20,10 +20,16 @@ make            # list what is available
 make install    # guided setup
 ```
 
-Or drive it directly — `make` is a convenience, not a dependency:
+`make` lists everything it can do. Each target maps to a `./tc` command of the same name, so use
+whichever you prefer — `make` is a convenience, not a dependency:
 
 ```sh
-./tc            # interactive menu
+make            # list the targets
+make up         # start the stack
+make verify     # live end-to-end checks
+make check      # lint, tests and verify — what CI runs
+
+./tc            # or the interactive menu
 ```
 
 That is the whole installation. `./tc` is a POSIX shell script whose only dependency is the

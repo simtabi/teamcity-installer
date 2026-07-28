@@ -68,3 +68,46 @@ setup() {
     printf '%s\n' "${TC_MENU[@]}" | grep -q '^Quit|'
     printf '%s\n' "${TC_MENU_UNINSTALLED[@]}" | grep -q '^Quit|'
 }
+
+# --- the front ends must stay complete ----------------------------------------
+#
+# Three surfaces expose the same functionality: the menu, ./tc commands, and
+# make targets. A capability added to one and forgotten in the others is
+# invisible until somebody goes looking for it.
+
+@test "every ./tc command has a make target" {
+    local project="${PROJECT_ROOT:?}"
+    [ -f "$project/Makefile" ] || skip 'Makefile not reachable'
+
+    local -a commands targets missing=()
+    mapfile -t commands < <(sed -n '/main::run_command() {/,/^}/p' "$LIB/main.sh" \
+        | grep -oE '^        [a-z|-]+\)' | tr -d ' )' | tr '|' '\n' \
+        | grep -vE '^(help|--help|-h)$' | sort -u)
+    mapfile -t targets < <(grep -oE '^[a-z-]+( [a-z-]+)*:' "$project/Makefile" \
+        | tr -d ':' | tr ' ' '\n' | sort -u)
+
+    local c t found
+    for c in "${commands[@]}"; do
+        found=0
+        for t in "${targets[@]}"; do [ "$c" = "$t" ] && { found=1; break; }; done
+        (( found )) || missing+=("$c")
+    done
+
+    [ ${#missing[@]} -eq 0 ] || { echo "commands with no make target: ${missing[*]}"; return 1; }
+}
+
+@test "every menu action is reachable from the command line" {
+    local -a handlers=() missing=()
+    local entry handler cmd
+    for entry in "${TC_MENU[@]}"; do
+        handler=${entry##*|}
+        # Submenus and Quit are inherently interactive. What matters is that the
+        # actions *inside* them are scriptable, which the command audit covers.
+        case $handler in
+            main::quit|*::menu|main::doctor_menu) continue ;;
+        esac
+        grep -q "$handler" <(sed -n '/main::run_command() {/,/^}/p' "$LIB/main.sh") \
+            || missing+=("${entry%%|*} -> $handler")
+    done
+    [ ${#missing[@]} -eq 0 ] || { echo "menu-only actions: ${missing[*]}"; return 1; }
+}

@@ -36,6 +36,7 @@ Running `./tc` with no arguments opens the menu. Before a stack exists it offers
 | Doctor | diagnostics — see [doctor](doctor.md) |
 | Verify | live end-to-end checks — see [verify](verify.md) |
 | Token | print the super user token for TeamCity's first-run setup |
+| Admin | create the first administrator account |
 | Open | print the URL (the console is a container and cannot open a browser) |
 | Shell | `exec` a shell in a running container |
 | Reconfigure | re-run the wizard with current values prefilled |
@@ -48,25 +49,45 @@ A failure inside any action reports the file, line and command, then returns to 
 Every menu action has a non-interactive equivalent:
 
 ```sh
+# lifecycle
 ./tc install             # guided setup
-./tc up                  # start
-./tc down                # stop
+./tc reconfigure         # change settings, keeping all data
+./tc up                  # start          (make up / make start)
+./tc down                # stop, data kept
 ./tc restart
+./tc reset               # destroy the stack and all its data
+
+# looking at it
 ./tc status              # non-zero exit when not fully running
-./tc logs [service]
+./tc logs [service]      # container logs
+./tc journal [tool]      # this console's own logs
+./tc doctor              # diagnostics
+./tc verify [--deep]     # live end-to-end checks
+./tc preflight           # is this machine ready
+./tc open                # print the URL
+./tc shell [service]     # shell in a running container
+
+# accounts and agents
+./tc token               # super user token for first-run setup
+./tc admin               # create the first administrator
 ./tc agents              # list
-./tc authorize           # authorize all pending agents
+./tc authorize           # authorize every pending agent
+
+# data
 ./tc backup [native|logical|cold]
 ./tc restore
+./tc prune               # apply TC_BACKUP_KEEP retention
 ./tc upgrade
-./tc doctor
-./tc verify [--deep]     # live end-to-end checks
-./tc token               # super user token, for first-run setup
-./tc preflight
-./tc reset
-./tc lint                # shellcheck, inside the container
+
+# development
+./tc lint                # shellcheck
+./tc test                # bats
 ./tc --help
 ```
+
+Every one of these has a `make` target of the same name — `make status`, `make admin`,
+`make backup KIND=native`. A test asserts that correspondence holds, and another asserts every
+menu action is reachable from the command line, so the three front ends cannot drift apart.
 
 ## Scripting
 

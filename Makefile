@@ -11,16 +11,20 @@ SHELL := /bin/sh
 TC    := ./tc
 
 .DEFAULT_GOAL := help
-.PHONY: help perms up down start stop restart status logs journal token doctor \
-        verify verify-deep preflight install reconfigure agents authorize \
-        backup restore upgrade reset lint test check clean
+.PHONY: help perms up down start stop restart status logs journal token admin \
+        shell open doctor verify verify-deep preflight install reconfigure \
+        agents authorize backup restore prune upgrade reset lint test check clean
 
 ## help: list the targets
 help:
 	@printf 'TeamCity Installer\n\n'
 	@grep -E '^## ' $(MAKEFILE_LIST) \
 	  | sed -e 's/^## //' \
-	  | awk -F': *' '{ printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2 }'
+	  | awk '{ i = index($$0, ":"); \
+	           name = substr($$0, 1, i - 1); \
+	           desc = substr($$0, i + 1); \
+	           sub(/^ +/, "", desc); \
+	           printf "  \033[1m%-14s\033[0m %s\n", name, desc }'
 	@printf '\nEverything runs in containers; nothing is installed on this machine.\n'
 
 ## perms: restore executable bits and strip CRLF line endings
@@ -43,11 +47,11 @@ perms:
 install: perms
 	@$(TC) install
 
-## up: start the stack
+## up: start the stack (alias: start)
 up start: perms
 	@$(TC) up
 
-## down: stop the stack, keeping all data
+## down: stop the stack, keeping all data (alias: stop)
 down stop: perms
 	@$(TC) down
 
@@ -70,6 +74,22 @@ journal: perms
 ## token: super user token for TeamCity's first-run setup
 token: perms
 	@$(TC) token
+
+## admin: create the first administrator account
+admin: perms
+	@$(TC) admin
+
+## shell: open a shell in a container (make shell SERVICE=server)
+shell: perms
+	@$(TC) shell $(SERVICE)
+
+## open: print the TeamCity URL
+open: perms
+	@$(TC) open
+
+## reconfigure: change settings, keeping all data
+reconfigure: perms
+	@$(TC) reconfigure
 
 ## doctor: diagnostics and health probes
 doctor: perms
@@ -102,6 +122,10 @@ backup: perms
 ## restore: restore from an archive
 restore: perms
 	@$(TC) restore
+
+## prune: apply backup retention (TC_BACKUP_KEEP)
+prune: perms
+	@$(TC) prune
 
 ## upgrade: move to another TeamCity version
 upgrade: perms

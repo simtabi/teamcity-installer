@@ -261,6 +261,9 @@ TeamCity control console
   ./tc doctor              diagnostics
   ./tc token               super user token for TeamCity's first-run setup
   ./tc admin               create the first administrator account
+  ./tc shell [service]     open a shell in a running container
+  ./tc open                print the TeamCity URL
+  ./tc reconfigure         change settings, keeping all data
   ./tc logs [service]      container logs
   ./tc journal [tool]      this console's own logs (add 'follow' to tail)
   ./tc preflight           check this machine is ready
@@ -308,12 +311,13 @@ main::test() {
 main::_scope_for() {
     case $1 in
         up|start|down|stop|restart|status|logs|token|shell|open) printf 'stack' ;;
+        prune)                                                   printf 'backup' ;;
         agents|authorize)                                        printf 'agents' ;;
         backup|restore)                                          printf 'backup' ;;
         upgrade)                                                 printf 'upgrade' ;;
         doctor)                                                  printf 'doctor' ;;
         verify)                                                  printf 'verify' ;;
-        install)                                                 printf 'wizard' ;;
+        install|reconfigure)                                     printf 'wizard' ;;
         admin)                                                   printf 'admin' ;;
         *)                                                       printf 'console' ;;
     esac
@@ -352,6 +356,9 @@ main::run_command() {
         doctor)    doctor::run ;;
         token)     stack::token ;;
         admin)     admin::bootstrap ;;
+        shell)     stack::shell "${1:-}" ;;
+        open)      stack::open_url ;;
+        reconfigure) wizard::run ;;
         journal)   log::show "${1:-}" "${2:-}" ;;
         prune)     ui::scope backup; backup::prune ;;
         preflight) preflight::run ;;
