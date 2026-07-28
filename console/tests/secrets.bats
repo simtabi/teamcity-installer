@@ -113,7 +113,7 @@ setup() {
 
 @test "git operates on the mounted repository without an ownership complaint" {
     command -v git >/dev/null || skip 'git unavailable'
-    cd "${PROJECT_ROOT:?}"
+    cd "$PROJECT"
 
     run git status --porcelain
     [ "$status" -eq 0 ] || { echo "$output"; return 1; }
