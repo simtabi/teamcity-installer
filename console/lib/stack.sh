@@ -109,6 +109,17 @@ stack::_await_ready() {
     ui::info 'Waiting for TeamCity to answer on HTTP…'
     ui::note 'First boot creates the database schema and can take a few minutes.'
 
+    # A server that has already been set up passes *through* the maintenance
+    # page while it restarts: /login.html answers 503 and /mnt answers 200, which
+    # is indistinguishable from a genuine first run. Returning on the first sight
+    # of that told people to accept a licence they had accepted weeks ago, and
+    # handed control back while the server was still booting.
+    #
+    # A real first run stays there indefinitely; a restart does not. So treat the
+    # state as transient until it has persisted, and only then believe it.
+    local setup_grace=120
+    local setup_seen=0
+
     local waited=0 limit=900
     while (( waited < limit )); do
         case $(stack::server_state) in
@@ -125,10 +136,15 @@ stack::_await_ready() {
                 agents::authorize_pending
                 return 0 ;;
             setup)
-                ui::blank
-                ui::ok "TeamCity is up at $(conf::url)"
-                stack::show_super_user_token
-                return 0 ;;
+                if (( setup_seen >= setup_grace )); then
+                    ui::blank
+                    ui::ok "TeamCity is up at $(conf::url)"
+                    stack::show_super_user_token
+                    return 0
+                fi
+                setup_seen=$(( setup_seen + 5 ))
+                ui::waiting "$setup_seen" 'starting up' ;;
+            *) setup_seen=0 ;;
         esac
 
         # Fail fast rather than burning the full timeout on a container that has

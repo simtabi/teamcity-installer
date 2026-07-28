@@ -165,3 +165,22 @@ on_a_tty() {
     offenders=$(cat /tmp/silent.$$); rm -f /tmp/silent.$$
     [ -z "$offenders" ] || { echo "$offenders"; return 1; }
 }
+
+# --- a restart is not a first run ---------------------------------------------
+#
+# An already-configured server passes through the maintenance page while it
+# restarts — /login.html 503, /mnt 200 — which looks exactly like a first run.
+# Returning on first sight of it told people to accept a licence they had
+# accepted long ago, and handed back control mid-boot, so the next command ran
+# against a half-started server.
+
+@test "readiness waits out a transient maintenance state" {
+    grep -q 'setup_grace' "$LIB/stack.sh"
+    grep -q 'setup_seen' "$LIB/stack.sh"
+}
+
+@test "the grace period is long enough for a real restart" {
+    local grace
+    grace=$(grep -oE 'setup_grace=[0-9]+' "$LIB/stack.sh" | head -1 | cut -d= -f2)
+    [ "${grace:-0}" -ge 60 ] || { echo "grace is only ${grace}s"; return 1; }
+}
