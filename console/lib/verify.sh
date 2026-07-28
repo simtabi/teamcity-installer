@@ -66,13 +66,27 @@ verify::_stack() {
     esac
 
     # datadir-init must have succeeded, or the datadir was never seeded.
-    local code
+    #
+    # Initialised, not merely declared: `local code` leaves it *unset*, and the
+    # container is gone the moment anyone runs `docker container prune` — it exits
+    # immediately by design, so it is the first thing a prune collects. The check
+    # below then read an unset variable and `set -u` aborted the whole verify run
+    # with "line 76: code: unbound variable", which says nothing about the missing
+    # container it was actually trying to report.
+    local code=''
     local init_id; init_id=$(stack::container datadir-init)
     if [[ -n $init_id ]]; then
         code=$(docker inspect "$init_id" -f '{{.State.ExitCode}}' 2>/dev/null || true)
     fi
     if [[ $TC_DB != postgres ]]; then
         verify::_skip 'datadir-init exited cleanly' 'bundled database, no init step'
+    elif [[ -z $init_id ]]; then
+        # Absent is not failed. This container exits as soon as it has done its
+        # work, so it is the first thing `docker container prune` collects, and a
+        # routine cleanup would otherwise be reported as a broken data directory.
+        # What it produces is checked directly by the data-directory checks below,
+        # so nothing goes unverified by skipping here.
+        verify::_skip 'datadir-init exited cleanly' 'container already removed; its output is checked below'
     elif [[ $code == 0 ]]; then
         verify::_pass 'datadir-init exited cleanly'
     else
@@ -86,7 +100,18 @@ verify::_stack() {
                   else
                       verify::_pass 'server answers HTTP' '200, setup complete'
                   fi ;;
-        setup)    verify::_pass 'server answers HTTP' '503, awaiting first-run setup' ;;
+        setup)    # A server that failed to start also answers 503 with a maintenance
+                  # page, and this reported that as a pass — "awaiting first-run
+                  # setup" — while TeamCity was showing a startup error. The page
+                  # says which it is; ask it rather than assume the benign one.
+                  local why stage
+                  why=$(stack::maintenance_reason); stage=$(stack::maintenance_stage)
+                  if [[ $stage == EXCEPTION ]]; then
+                      verify::_fail 'server answers HTTP' "503, ${why:-server startup error}"
+                      verify::_why 'Read the cause with: ./tc logs server'
+                  else
+                      verify::_pass 'server answers HTTP' "503, ${why:-awaiting first-run setup}"
+                  fi ;;
         starting) verify::_fail 'server answers HTTP' 'no response' ;;
     esac
 }

@@ -127,6 +127,14 @@ HOST_TZ=$(host_tz)
 
 # `sort -z` is not in busybox sort, so the file list is sorted as ordinary lines
 # under a fixed collation. Filenames here are plain ASCII by construction.
+#
+# The result becomes an image tag, so it is reduced to alphanumerics before it is
+# truncated. Not cosmetic: the tools disagree about their output format. sha256sum
+# prints "<hex>  -", but cksum prints "<checksum> <bytes>" — and its checksum is
+# short enough that the space falls inside the first twelve characters, giving
+# "363105736 13" and a build that dies with `invalid reference format`. cksum is
+# the last resort, reached only on a distribution carrying none of the others, so
+# nothing here would have hit it.
 console_hash() {
     find "$ROOT/console" -type f 2>/dev/null \
         | LC_ALL=C sort \
@@ -135,6 +143,7 @@ console_hash() {
               hash_stdin <"$f"
           done \
         | hash_stdin \
+        | tr -dc '[:alnum:]' \
         | cut -c1-12
 }
 

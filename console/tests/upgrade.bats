@@ -134,3 +134,24 @@ watch() { upgrade::_watch_maintenance "$@" 2>&1; }
     [[ $output == *'teamcity-cold-20260728-162003'* ]]
     [[ $output == *'./tc restore'* ]]
 }
+
+# --- verify's reading of the same page -----------------------------------------
+
+@test "a server that failed to start is not reported as awaiting setup" {
+    # Both answer 503 with a maintenance page. Reported as a pass, a wedged
+    # server looks like a stack waiting politely for its first administrator.
+    stack::maintenance_stage()  { printf 'EXCEPTION'; }
+    stack::maintenance_reason() { printf 'TeamCity server startup error'; }
+
+    [ "$(stack::maintenance_stage)" = 'EXCEPTION' ]
+    run grep -A10 'setup)' "$LIB/verify.sh"
+    [[ $output == *'EXCEPTION'* ]]       || { echo 'verify does not distinguish a startup error'; return 1; }
+    [[ $output == *'verify::_fail'* ]]   || { echo 'a startup error is still a pass'; return 1; }
+    [[ $output == *'./tc logs server'* ]] || { echo 'no route to the cause'; return 1; }
+}
+
+@test "a genuine first run is still a pass, not a failure" {
+    run grep -A10 'setup)' "$LIB/verify.sh"
+    [[ $output == *'verify::_pass'* ]]
+    [[ $output == *'awaiting first-run setup'* ]]
+}

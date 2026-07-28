@@ -10,7 +10,7 @@ Where this runs, what was done to make that true, and — plainly — what has a
 | Linux, x86-64 | a full stack stood up and verified in CI on every scheduled run — see below |
 | macOS, Intel | expected to work; same code path, different image architecture |
 | Linux, arm64 | expected to work; same code path as x86-64, which is exercised |
-| Windows via WSL 2 | expected to work; portability asserted by tests, not run on a real host |
+| Windows via WSL 2 | launcher run on a WSL-shaped host; not run on a real Windows machine |
 | Windows without WSL | not supported |
 
 > **What "tested" means here, precisely.**
@@ -37,10 +37,26 @@ Where this runs, what was done to make that true, and — plainly — what has a
 > agent-authorization and native-backup checks skip there. Everything up to that gate is proven on
 > Linux; everything past it is proven only on macOS.
 >
-> **WSL 2** is still unexercised. Support for it comes from removing every tool and flag that is not
-> universally present, and from tests asserting those absences — `tc` parses under both POSIX `sh`
-> and busybox `ash`, and is checked for `shasum`, `sort -z` and GNU-only flags. That guards the
-> usual portability failures; it is not the same as having been run there. Reports welcome.
+> **WSL 2** was exercised as far as it can be from here: `./tc` was run from an Ubuntu 24.04
+> container shaped like a WSL distribution — `/bin/sh` is dash, `/etc/localtime` is a regular file
+> rather than a symlink, `/etc/timezone` is present, `shasum` is absent, and the docker CLI talks to
+> a daemon that lives elsewhere, which is exactly Docker Desktop's WSL integration. From there it
+> built the console image and ran real commands against the live stack.
+>
+> Four WSL-specific behaviours were confirmed by running them, not by reading the code:
+>
+> - **Timezone.** With `/etc/timezone` saying `Asia/Tokyo` and `/etc/localtime` a copy of
+>   `America/New_York`, the console's own log lines came out at `+0900`. The Debian file wins, and
+>   the missing symlink — the thing that silently produced UTC — no longer decides anything.
+> - **CRLF.** A checkout converted to CRLF fails with `./tc: not found`, which never mentions line
+>   endings. `make perms` repairs it and the launcher runs.
+> - **`/mnt/c`.** A checkout on the Windows drive prints the slow-filesystem note before anything
+>   else happens, including the Docker lookup.
+> - **Hashing.** With `shasum` absent, the fallback chain produced a stable tag from `sha256sum`,
+>   `sha1sum`, `md5sum` and `cksum` alike — after a fix; see below.
+>
+> What is still unproven: a real Windows kernel, a real 9p bridge, and Docker Desktop's actual WSL
+> integration. A container shaped like WSL is not WSL. Reports welcome.
 
 ## Why the risk is concentrated in one file
 
@@ -56,6 +72,13 @@ That is the whole portability surface — one file, checked by `portability.bats
 `shasum` (a Perl script); many Linux images have no Perl but do have `sha256sum`. The launcher
 tries `sha256sum`, `shasum`, `sha1sum`, `md5sum`, then `cksum`. Any of them will do — the hash only
 has to be stable on one machine.
+
+Running it that way found a bug that no machine with `sha256sum` could hit. The hashers disagree
+about their output format: `sha256sum` prints `<hex>  -`, but `cksum` prints `<checksum> <bytes>`,
+and its checksum is short enough that the space falls inside the first twelve characters. The tag
+came out as `363105736 13`, and `docker build` rejects that with `invalid reference format`. The
+hash is now reduced to alphanumerics before it is truncated — cleaning after the cut would still let
+a space decide where the twelve characters end.
 
 **Sorting.** `sort -z` is absent from busybox. The file list is sorted as ordinary lines under
 `LC_ALL=C`.
