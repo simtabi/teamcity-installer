@@ -4,8 +4,8 @@ Live end-to-end checks against a running stack, and the reason they are a comman
 checklist.
 
 ```sh
-./tc verify           # 15 checks, non-destructive
-./tc verify --deep    # adds a real native backup round-trip
+./tc verify           # 18 checks, non-destructive
+./tc verify --deep    # same, without the time budget on the backup check
 ```
 
 ## Why this exists
@@ -50,8 +50,24 @@ root-then-chown seeding order exists to guarantee.
 every configured agent connected and authorized; and the authorized count within the free licence,
 since exceeding it pauses the entire build queue.
 
-**Backup** (`--deep` only) — takes a real native backup through REST, asserts the archive and its
-manifest exist, then deletes what it made.
+**Backup** — takes a real native backup through REST, asserts the archive and its manifest exist,
+then deletes what it made.
+
+This runs by default, because it is not disruptive: TeamCity supports backing up a *running*
+server, and measuring it here found zero non-200 responses throughout. It was previously gated
+behind `--deep` with the note "briefly pauses the server", which was wrong — that cost belongs to
+the cold and logical tiers, which stop containers.
+
+What it does cost is time, so it runs under a budget (`VERIFY_BACKUP_TIMEOUT`, 120s) and reports
+how long it took. Exceed the budget and it skips saying so; `--deep` removes the budget.
+
+> Sizing this from the data directory was tried and abandoned: 2.1 GB there turned out to be 1.1 GB
+> of caches and 1.0 GB of plugins, none of which the backup includes. The archive was 1.4 MB and
+> the run took two seconds. Measuring the real cost beats predicting it badly.
+
+JetBrains' caveat is consistency rather than availability — a backup taken while builds run can
+capture them mid-update. That matters for a backup you mean to restore, not for proving the path
+works.
 
 ## Skips are not passes
 

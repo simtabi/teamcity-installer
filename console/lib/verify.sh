@@ -293,20 +293,32 @@ verify::_rest() {
 
 # --- backup -------------------------------------------------------------------
 #
-# Exercises the native tier for real, then removes what it made. Opt-in with
-# --deep because it stops the server briefly and writes to backups/.
+# The native tier runs against a *live* server. TeamCity supports taking a
+# backup without stopping, and measuring it here found zero non-200 responses
+# throughout — so this check is not disruptive and does not need to be opt-in.
+#
+# It was gated behind --deep with the note "briefly pauses the server", which
+# was simply wrong: that cost belongs to the cold and logical tiers, which do
+# stop containers. What the native tier actually costs is time proportional to
+# the data directory, so the gate is now a size threshold rather than a blanket
+# opt-out, and --deep forces it regardless.
+#
+# JetBrains' one caveat is consistency, not availability: a backup taken while
+# builds are running can capture queued and running builds mid-update. That
+# matters for a backup you intend to restore, not for proving the path works.
+#
+# The cost is bounded by time, not by guesswork. Sizing it from the data
+# directory looked reasonable and was wrong: 2.1 GB there is 1.1 GB of caches
+# and 1.0 GB of plugins, none of which the backup includes — the archive came to
+# 1.4 MB and the whole thing took two seconds. Running it under a timeout
+# measures the real cost instead of predicting it badly.
+
+VERIFY_BACKUP_TIMEOUT=${VERIFY_BACKUP_TIMEOUT:-120}
 
 verify::_backup() {
+    ui::scope verify
     ui::blank; ui::info 'Backup'
 
-    if [[ ${VERIFY_DEEP:-0} != 1 ]]; then
-        verify::_skip 'native backup round-trip' 'deep check'
-        verify::_why 'Run ./tc verify --deep to exercise it (briefly pauses the server).'
-        return
-    fi
-
-    # REST reachability is the real precondition; a stored access token is not,
-    # since agents::_rest falls back to the super user token.
     if [[ $(stack::server_state) != ready ]]; then
         verify::_skip 'native backup round-trip' 'server not past first-run setup'
         return
@@ -316,21 +328,54 @@ verify::_backup() {
         return
     fi
 
-    local before; before=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | wc -l | tr -d ' ')
-    if backup::_native >/dev/null 2>&1; then
-        local after; after=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | wc -l | tr -d ' ')
-        if (( after > before )); then
-            local made; made=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | sort | tail -1)
-            if [[ -f $made/manifest.json ]] && find "$made" -name '*.zip' | grep -q .; then
-                verify::_pass 'native backup round-trip' "$(basename "$made")"
-            else
-                verify::_fail 'native backup round-trip' 'archive incomplete'
-            fi
-            rm -rf "$made"        # leave no clutter behind
-        else
-            verify::_fail 'native backup round-trip' 'no archive produced'
-        fi
+    local budget=$VERIFY_BACKUP_TIMEOUT
+    [[ ${VERIFY_DEEP:-0} == 1 ]] && budget=1800     # --deep waits as long as it takes
+
+    local before started rc=0
+    before=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | wc -l | tr -d ' ')
+    started=$(date +%s)
+
+    # Not `timeout backup::_native`: timeout execs a binary and cannot run a
+    # shell function — the same trap that made every ui::spin call fail under a
+    # terminal. Run it as a background job and enforce the deadline here.
+    backup::_native >/dev/null 2>&1 &
+    local pid=$! waited=0
+    while kill -0 "$pid" 2>/dev/null && (( waited < budget )); do
+        sleep 1; waited=$(( waited + 1 ))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        rc=124
     else
-        verify::_fail 'native backup round-trip' 'the backup call failed'
+        wait "$pid" || rc=$?
     fi
+
+    local elapsed=$(( $(date +%s) - started ))
+
+    if (( rc == 124 )); then
+        verify::_skip 'native backup round-trip' "exceeded ${budget}s"
+        verify::_why './tc verify --deep waits as long as it takes.'
+        return
+    fi
+    if (( rc != 0 )); then
+        verify::_fail 'native backup round-trip' 'the backup call failed'
+        verify::_why 'Run ./tc backup native to see the error.'
+        return
+    fi
+
+    local after; after=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | wc -l | tr -d ' ')
+    if (( after <= before )); then
+        verify::_fail 'native backup round-trip' 'no archive produced'
+        return
+    fi
+
+    local made; made=$(find "$BACKUP_DIR" -maxdepth 1 -name 'teamcity-native-*' | sort | tail -1)
+    if [[ -f $made/manifest.json ]] && find "$made" -name '*.zip' | grep -q .; then
+        verify::_pass 'native backup round-trip' "$(basename "$made") in ${elapsed}s"
+    else
+        verify::_fail 'native backup round-trip' 'archive incomplete'
+    fi
+
+    rm -rf "$made"      # leave no clutter behind
 }

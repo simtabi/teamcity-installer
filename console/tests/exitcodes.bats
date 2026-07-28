@@ -59,3 +59,26 @@ setup() { load_libs; }
     run backup::_cold
     [ "$status" -eq 0 ]
 }
+
+# --- timeouts must not exec shell functions -----------------------------------
+#
+# `timeout cmd` and `gum spin -- cmd` both exec their argument, so neither can
+# run a shell function. That cost the project every ui::spin call site once; the
+# backup deadline in verify.sh was about to repeat it.
+
+@test "no shell function is handed to timeout" {
+    local offenders=''
+    local f cmd
+    for f in "$LIB"/*.sh; do
+        while IFS= read -r cmd; do
+            [[ -z $cmd ]] && continue
+            [[ $cmd == *::* ]] && offenders+="$f: timeout $cmd"$'\n'
+        done < <(grep -hoE 'timeout +"?\$?[a-zA-Z_{}]+"? +[a-zA-Z_:]+' "$f" 2>/dev/null \
+                 | awk '{print $NF}')
+    done
+    [ -z "$offenders" ] || { echo "$offenders"; return 1; }
+}
+
+@test "the backup deadline uses a background job, not timeout" {
+    grep -q 'kill -0 "$pid"' "$LIB/verify.sh"
+}
