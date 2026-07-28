@@ -259,6 +259,59 @@ agents::_authorize_one() {
 # and the console makes it a single action. If a future TeamCity makes the
 # property work as described, this is the place to reinstate it.
 
+# --- unattended authorization -------------------------------------------------
+#
+# Agents register a little after the server is ready and sit in the Unauthorized
+# list taking no builds. Nothing about that looks broken, which is why it is the
+# step people miss.
+#
+# TeamCity's own agentAutoAuthorize property does not work (see above), but the
+# REST route does, and the super user token is enough to drive it — so a fresh
+# install can finish the job itself instead of leaving a follow-up command to
+# remember. Bounded, and silent when there is nothing to do.
+agents::authorize_pending() {
+    local budget=${1:-90}
+
+    [[ $(stack::server_state) == ready ]] || return 0
+    (( TC_AGENTS > 0 )) || return 0
+    agents::_rest GET /app/rest/server >/dev/null 2>&1 || return 0
+
+    local waited=0 json count=0
+    while (( waited < budget )); do
+        json=$(agents::_rest GET '/app/rest/agents?locator=authorized:false&fields=count,agent(id,name)' 2>/dev/null) || break
+        count=$(printf '%s' "$json" | jq -r '.count // 0' 2>/dev/null || echo 0)
+        (( count > 0 )) && break
+
+        # Every agent already authorized? Then there is nothing to wait for.
+        local known
+        known=$(agents::_rest GET '/app/rest/agents?locator=defaultFilter:false&fields=count' 2>/dev/null \
+            | jq -r '.count // 0' 2>/dev/null || echo 0)
+        (( known >= TC_AGENTS )) && return 0
+
+        sleep 5; waited=$(( waited + 5 ))
+    done
+
+    (( count > 0 )) || return 0
+
+    ui::blank
+    ui::info "Authorizing $count agent(s)…"
+
+    local -a pending
+    mapfile -t pending < <(printf '%s' "$json" | jq -r '.agent[]? | "\(.id)|\(.name)"' 2>/dev/null)
+
+    local entry id name ok=0
+    for entry in "${pending[@]}"; do
+        id=${entry%%|*}; name=${entry#*|}
+        if agents::_authorize_one "$id"; then
+            ui::ok "authorized $name"; ok=$(( ok + 1 ))
+        else
+            ui::warn "could not authorize $name — run  ./tc authorize"
+        fi
+    done
+    log::info agents.autoauth "authorized $ok agent(s) unattended"
+    return 0
+}
+
 # --- scale --------------------------------------------------------------------
 
 agents::scale() {

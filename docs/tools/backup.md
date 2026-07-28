@@ -95,6 +95,16 @@ starts up again.
 Volumes are wiped rather than untarred over. Merging an archive into existing content produces a
 state that matches neither.
 
+## Credentials after a restore
+
+An archive carries its own database credentials inside the restored
+`database.properties`, and the PostgreSQL volume it came from expects those. `stack/.env` keeps
+whatever it held before, so a restore used to leave the config claiming a password the database did
+not have — harmless until the `pgdata` volume was ever recreated, at which point the two disagreed
+and the server could not connect.
+
+Restore now realigns `stack/.env` with the restored data directory and says so.
+
 ## Verifying a guard
 
 Copy an archive, edit its manifest, and confirm the refusal:

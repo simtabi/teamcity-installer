@@ -119,6 +119,10 @@ stack::_await_ready() {
                 # needs no browser, so there is no reason to leave it to a
                 # follow-up step someone has to know about.
                 stack::needs_first_user && admin::bootstrap
+                # The last step a stock install leaves manual. It works over
+                # REST with the super user token, so there is no reason to make
+                # someone remember it.
+                agents::authorize_pending
                 return 0 ;;
             setup)
                 ui::blank

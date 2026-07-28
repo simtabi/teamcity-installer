@@ -73,6 +73,26 @@ connection to your stack at all — different image, different container, no sha
 **`docker system prune`.** Safe by default: it does not remove named volumes. `docker system prune
 --volumes` is *not* safe — it removes unused ones, which includes yours whenever the stack is down.
 
+## What a rebuild from scratch reproduces
+
+`./tc reset` followed by `./tc up` was run end to end to check this, not inferred. From
+`stack/.env` alone, unattended:
+
+- the PostgreSQL container and its database
+- the JDBC driver and `database.properties` seeded into the data directory
+- the timezone on every container
+- all 29 named volumes, with no anonymous ones
+- the first administrator account
+- authorization of every agent that connects
+
+**One step cannot be automated: accepting TeamCity's licence agreement.** That is a legal act, and
+this tool will not click through it on your behalf. Until it is accepted the server sits on its
+maintenance page, and the administrator and agent steps — which do run automatically — wait behind
+it.
+
+So a fresh install is: `./tc up`, accept the licence in the browser using the token `./tc token`
+prints, and everything else takes care of itself.
+
 ## If you want a safety net
 
 ```sh

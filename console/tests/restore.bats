@@ -77,3 +77,45 @@ manifest() {
     run backup::_check_compatible "$MANIFEST"
     [ "$status" -eq 0 ]
 }
+
+# --- credentials must survive a restore intact --------------------------------
+#
+# An archive carries its own database credentials in the restored
+# database.properties, and the PostgreSQL volume expects them. stack/.env keeps
+# whatever it held before, so a restore left the config claiming a password the
+# database did not have — invisible until the pgdata volume was recreated.
+
+@test "restore realigns .env with the restored data directory" {
+    default_conf
+    source "$LIB/backup.sh"
+
+    TC_PG_PASSWORD='example-old-password'
+    docker() { printf 'example-archive-password'; }
+    conf::save() { SAVED=1; }
+    ui::note() { :; }
+
+    backup::_realign_db_password
+    [ "$TC_PG_PASSWORD" = 'example-archive-password' ]
+    [ "${SAVED:-0}" = 1 ]
+}
+
+@test "realignment is a no-op when the passwords already agree" {
+    default_conf
+    source "$LIB/backup.sh"
+
+    TC_PG_PASSWORD='same'
+    docker() { printf 'same'; }
+    conf::save() { SAVED=1; }
+
+    backup::_realign_db_password
+    [ "${SAVED:-0}" = 0 ]
+}
+
+@test "realignment is skipped for the bundled database" {
+    default_conf
+    source "$LIB/backup.sh"
+    TC_DB=hsqldb
+    conf::save() { SAVED=1; }
+    backup::_realign_db_password
+    [ "${SAVED:-0}" = 0 ]
+}

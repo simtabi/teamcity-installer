@@ -13,6 +13,9 @@ load_libs() {
     # real project is for tests that need to read tracked files.
     PROJECT_ROOT="${TC_ROOT:-$PWD}"
 
+    # log.sh first: ui.sh routes every message through it.
+    # shellcheck disable=SC1090
+    source "$LIB/log.sh"
     # shellcheck disable=SC1090
     source "$LIB/ui.sh"
 

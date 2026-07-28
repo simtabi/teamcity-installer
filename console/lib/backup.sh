@@ -398,8 +398,34 @@ backup::restore() {
 
     (( rc == 0 )) || { ui::err 'Restore failed; the stack was left stopped.'; return 1; }
 
+    # An archive carries its own database credentials in the restored
+    # database.properties, and the PostgreSQL volume it came with expects them.
+    # stack/.env keeps whatever it held before the restore, so without this the
+    # config on disk claims a password the database does not have — harmless
+    # until the pgdata volume is ever recreated, at which point the two disagree
+    # and the server cannot connect.
+    backup::_realign_db_password
+
     ui::spin 'Starting the stack' -- stack::compose up --detach
     stack::_await_ready
+}
+
+# Brings stack/.env back in step with the credentials inside the restored
+# data directory.
+backup::_realign_db_password() {
+    [[ $TC_DB == postgres ]] || return 0
+
+    local restored
+    restored=$(docker run --rm -v "$(conf::volume datadir)":/d:ro alpine:3.22 \
+        sh -c 'grep "^connectionProperties.password=" /d/config/database.properties 2>/dev/null | cut -d= -f2-' 2>/dev/null)
+
+    [[ -n $restored ]] || return 0
+    [[ $restored == "$TC_PG_PASSWORD" ]] && return 0
+
+    TC_PG_PASSWORD=$restored
+    conf::save
+    ui::note 'Database password in stack/.env realigned with the restored archive.'
+    log::info backup.restore 'realigned TC_PG_PASSWORD with the restored data directory'
 }
 
 backup::_show_manifest() {
