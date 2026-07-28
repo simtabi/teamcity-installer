@@ -157,3 +157,67 @@ manifest() {
     run grep -n 'docker volume create "' "$LIB/backup.sh"
     [ "$status" -ne 0 ]
 }
+
+# --- retention across stacks ---------------------------------------------------
+#
+# Archive names carry no stack — every one is "teamcity-<kind>-<stamp>" whatever
+# the stack is called. A second stack sharing the checkout counted its backups
+# against the same limit and deleted the first stack's, oldest-first.
+
+_archive() {   # _archive <name> <stack>
+    mkdir -p "$BACKUP_DIR/$1"
+    printf '{"kind":"cold","stack":"%s"}\n' "$2" > "$BACKUP_DIR/$1/manifest.json"
+}
+
+@test "retention counts only this stack's archives" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=2
+    _archive teamcity-cold-1 teamcity
+    _archive teamcity-cold-2 teamcity
+    _archive teamcity-cold-3 teamcity
+
+    run backup::prune
+    [ ! -d "$BACKUP_DIR/teamcity-cold-1" ]     # oldest of ours, correctly gone
+    [ -d "$BACKUP_DIR/teamcity-cold-2" ]
+    [ -d "$BACKUP_DIR/teamcity-cold-3" ]
+}
+
+@test "another stack's archives are never deleted by our retention" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=1
+    _archive teamcity-cold-1 tcupg
+    _archive teamcity-cold-2 tcupg
+    _archive teamcity-cold-3 teamcity
+
+    run backup::prune
+    [ -d "$BACKUP_DIR/teamcity-cold-1" ] || { echo "deleted another stack's backup"; return 1; }
+    [ -d "$BACKUP_DIR/teamcity-cold-2" ] || { echo "deleted another stack's backup"; return 1; }
+    [ -d "$BACKUP_DIR/teamcity-cold-3" ]
+}
+
+@test "an unattributable archive is left alone rather than pruned" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=1
+    mkdir -p "$BACKUP_DIR/teamcity-cold-mystery"       # no manifest at all
+    _archive teamcity-cold-2 teamcity
+
+    run backup::prune
+    [ -d "$BACKUP_DIR/teamcity-cold-mystery" ] || { echo 'deleted a backup it could not identify'; return 1; }
+    [ -d "$BACKUP_DIR/teamcity-cold-2" ]
+}
+
+@test "the owning stack is read from the manifest" {
+    _archive teamcity-cold-9 someplace
+    [ "$(backup::_archive_stack "$BACKUP_DIR/teamcity-cold-9")" = 'someplace' ]
+}
+
+@test "an archive with no manifest has no owner, rather than a wrong one" {
+    mkdir -p "$BACKUP_DIR/teamcity-cold-bare"
+    [ -z "$(backup::_archive_stack "$BACKUP_DIR/teamcity-cold-bare")" ]
+}
+
+@test "retention still prunes normally when every archive is ours" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=1
+    _archive teamcity-cold-1 teamcity
+    _archive teamcity-cold-2 teamcity
+    run backup::prune
+    [ ! -d "$BACKUP_DIR/teamcity-cold-1" ]
+    [ -d "$BACKUP_DIR/teamcity-cold-2" ]
+}

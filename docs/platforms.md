@@ -16,6 +16,16 @@ Where this runs, what was done to make that true, and — plainly — what has a
 > **What "tested" means here, precisely.**
 >
 > **macOS/arm64** is where this was developed: full first-run, upgrade, backup, restore and reset.
+> The upgrade path was exercised end to end against a throwaway stack — 2025.11.7 pulled, booted,
+> then upgraded to 2026.1.3: the mandatory pre-upgrade backup, the re-render, the pull, container
+> recreation, the maintenance watcher, and the printed token confirmed accepted by TeamCity's own
+> `/mnt/do/authenticate` (and a wrong one rejected). Both agent Docker modes were run the same way.
+>
+> One part of that is still unproven: TeamCity's *data directory upgrade* confirmation specifically.
+> Reaching it needs a server whose first run was completed, and completing a first run means
+> accepting the licence agreement — which this tool will not do on your behalf. The rehearsal
+> therefore stopped at the licence stage, which is the same maintenance page and the same token;
+> what has not been observed is TeamCity's own upgrade-confirmation wording.
 >
 > **Linux/x86-64** is exercised by the `e2e` CI job, which stands the stack up from nothing on
 > `ubuntu-latest` and runs the live checks against it. As of the first run: 12 volumes with none

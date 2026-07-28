@@ -60,6 +60,17 @@ Archives are around 1 GB each, so `TC_BACKUP_KEEP` (default 5) bounds them: afte
 backup the oldest beyond that are removed, and each removal is named rather than done silently.
 `./tc prune` (or `make clean`) applies the same policy on demand.
 
+**Retention counts only the current stack's archives.** Archive names carry no stack — every one is
+`teamcity-<kind>-<stamp>` whatever `TC_STACK` is called — so the owner is read from each archive's
+`manifest.json`. Without that, a second stack sharing the checkout (an upgrade rehearsal, a staging
+instance) counts its own backups against the same limit and deletes the first stack's, oldest-first,
+naming files their owner never made. An archive with no readable manifest is left alone and
+reported, never pruned: retention is worth less than a backup nobody can replace.
+
+`./tc restore` shows the owning stack in the archive list, and asks for confirmation before
+restoring one stack's archive into another — a legitimate thing to want when cloning an instance,
+never a thing to do by accident.
+
 Before a cold backup the console estimates the volume sizes, compares them with the free space in
 `backups/`, and refuses when it will not fit — showing both numbers:
 

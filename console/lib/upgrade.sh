@@ -106,8 +106,21 @@ upgrade::_watch_maintenance() {
         # "…better use a private browser window" sitting right beside the token.
         if [[ $(stack::server_state) == setup ]]; then
             token=$(stack::super_user_token)
+
+            # Say what TeamCity is asking for, not what we assume it is asking
+            # for. A "setup" server may want the data directory upgrade
+            # confirmed, or the licence agreement accepted, or a first
+            # administrator — and this used to announce the first of those
+            # regardless. Upgrading a server whose first run had never been
+            # completed produced instructions for a step TeamCity was not on.
+            local reason; reason=$(stack::maintenance_reason)
+
             ui::blank
-            ui::warn 'TeamCity needs you to confirm the data directory upgrade.'
+            if [[ -n $reason ]]; then
+                ui::warn "TeamCity is waiting for you: $reason"
+            else
+                ui::warn 'TeamCity is waiting for you to confirm the upgrade in its maintenance page.'
+            fi
             ui::note "  1. Open  $(conf::url)"
 
             if [[ -n $token ]]; then
@@ -121,7 +134,10 @@ upgrade::_watch_maintenance() {
                 ui::note '  2. It will ask for a token. Fetch it with:  ./tc token'
             fi
 
-            ui::note '  3. Confirm the upgrade and wait for it to finish.'
+            ui::note '  3. Complete the step it shows, then wait for it to finish.'
+            ui::blank
+            ui::note "This is not a hang; nothing further happens until that is done."
+            [[ -n ${1:-} ]] && ui::note "If it goes wrong, roll back with:  ./tc restore  →  $(basename "$1")"
             return 0
         fi
 

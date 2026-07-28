@@ -20,7 +20,16 @@ validate::_docker_ncpu() {
 }
 
 validate::_docker_mem_bytes() {
-    [[ -n ${_TC_MEM:-} ]] || _TC_MEM=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
+    if [[ -z ${_TC_MEM:-} ]]; then
+        # Guarded rather than trusted. With the daemon unreachable, `docker info
+        # --format` prints its own "0" for the template *and* exits non-zero, so
+        # an `|| echo 0` fallback appends a second line and the caller's
+        # `(( vm > 0 … ))` dies with "syntax error in expression" — bash noise
+        # thrown at the user in precisely the situation that is already going
+        # wrong. Take the last line and insist it is a number.
+        _TC_MEM=$(docker info --format '{{.MemTotal}}' 2>/dev/null | tail -1)
+        [[ $_TC_MEM =~ ^[0-9]+$ ]] || _TC_MEM=0
+    fi
     printf '%s' "$_TC_MEM"
 }
 

@@ -8,7 +8,11 @@
 
 load helper
 
-setup() { load_libs; default_conf; }
+setup() {
+    load_libs; default_conf
+    # shellcheck disable=SC1090
+    source "$LIB/upgrade.sh"   # the direction guard is validation in all but name
+}
 
 # --- memory -------------------------------------------------------------------
 
@@ -132,4 +136,60 @@ setup() { load_libs; default_conf; }
         run validate::tc_version "$bad"
         [ "$status" -ne 0 ] || { echo "accepted: $bad"; return 1; }
     done
+}
+
+# --- upgrade direction ---------------------------------------------------------
+
+# The console addresses the user on stderr, which `run` does not capture.
+direction() { upgrade::_check_direction "$@" 2>&1; }
+
+@test "an older target is refused, and the message says why" {
+    ui_speaks
+    TC_VERSION=2026.1.3
+    run direction 2025.11.7
+    [ "$status" -eq 1 ]
+    [[ $output == *'older than the running 2026.1.3'* ]]
+    [[ $output == *'restore a'* ]] || { echo 'no route back offered'; return 1; }
+}
+
+@test "upgrade direction sorts 2026.1.10 above 2026.1.9" {
+    # Lexically, "2026.1.10" < "2026.1.9" — the guard would then refuse a real
+    # upgrade and wave through a real downgrade. sort -V is what stops that.
+    TC_VERSION=2026.1.9
+    run upgrade::_check_direction 2026.1.10
+    [ "$status" -eq 0 ]
+
+    TC_VERSION=2026.1.10
+    run upgrade::_check_direction 2026.1.9
+    [ "$status" -eq 1 ]
+}
+
+@test "an unqualified version upgrades to its own patch releases" {
+    TC_VERSION=2026.1
+    run upgrade::_check_direction 2026.1.1
+    [ "$status" -eq 0 ]
+}
+
+@test "the memory probe survives an unreachable Docker daemon" {
+    # `docker info --format` prints "0" for the template and exits non-zero when
+    # it cannot connect, so a naive `|| echo 0` yields two lines and the caller's
+    # (( )) dies with a bash syntax error.
+    docker() { printf '0\n'; return 1; }
+    unset _TC_MEM
+
+    run validate::_docker_mem_bytes
+    [ "$status" -eq 0 ]
+    [ "$output" = '0' ]
+
+    unset _TC_MEM
+    local vm; vm=$(validate::_docker_mem_bytes)
+    run bash -c "(( $vm > 0 ))"           # must be a valid expression, not a parse error
+    [ "$status" -eq 1 ]
+}
+
+@test "a garbage memory reading is treated as unknown, not as a size" {
+    docker() { printf 'error during connect\n'; return 1; }
+    unset _TC_MEM
+    run validate::_docker_mem_bytes
+    [ "$output" = '0' ]
 }

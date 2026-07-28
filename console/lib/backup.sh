@@ -51,16 +51,42 @@ backup::_dir() { printf '%s/%s' "$BACKUP_DIR" "$1"; }
 # quietly consumed the disk. Oldest-first, and it names what it removes rather
 # than deleting silently — a backup disappearing without a word is worse than
 # one that never existed.
+# Archive names carry no stack — they are all "teamcity-<kind>-<stamp>" whatever
+# the stack is called — so retention has to read the manifest to know whose an
+# archive is. It matters: a second stack sharing this checkout (a version test,
+# a staging instance) would otherwise count its own backups against the limit and
+# delete the first stack's, oldest-first, with a message naming files their owner
+# never made.
+#
+# An archive that cannot be attributed at all is left alone and reported rather
+# than deleted. Retention is worth less than a backup nobody can replace.
+backup::_archive_stack() {
+    [[ -f $1/manifest.json ]] || return 0
+    jq -r '.stack // ""' "$1/manifest.json" 2>/dev/null
+}
+
 backup::prune() {
     local keep=${TC_BACKUP_KEEP:-5}
     [[ $keep =~ ^[0-9]+$ ]] || return 0
     (( keep > 0 )) || return 0
 
-    local -a archives
-    mapfile -t archives < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' | sort)
+    local -a all archives=() foreign=()
+    mapfile -t all < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' | sort)
+
+    local d owner
+    for d in "${all[@]}"; do
+        owner=$(backup::_archive_stack "$d")
+        if [[ $owner == "$TC_STACK" ]]; then archives+=("$d")
+        else foreign+=("$d")
+        fi
+    done
 
     local excess=$(( ${#archives[@]} - keep ))
-    (( excess > 0 )) || return 0
+    if (( excess <= 0 )); then
+        (( ${#foreign[@]} > 0 )) && log::debug backup.prune \
+            "left ${#foreign[@]} archive(s) belonging to another stack alone"
+        return 0
+    fi
 
     ui::blank
     ui::info "Retention: keeping the newest $keep archive(s)."
@@ -71,6 +97,9 @@ backup::prune() {
         rm -rf "${archives[$i]}"
     done
     ui::ok "Pruned $excess old archive(s)."
+    if (( ${#foreign[@]} > 0 )); then
+        ui::note "  ${#foreign[@]} archive(s) are not this stack's and were left alone."
+    fi
 }
 
 # --- disk guard ---------------------------------------------------------------
@@ -366,20 +395,21 @@ backup::list() {
     fi
 
     {
-        printf 'ARCHIVE,KIND,TEAMCITY,PG,SIZE,CREATED\n'
+        printf 'ARCHIVE,KIND,STACK,TEAMCITY,PG,SIZE,CREATED\n'
         local d m
         for d in "${dirs[@]}"; do
             m="$d/manifest.json"
             if [[ -f $m ]]; then
-                printf '%s,%s,%s,%s,%s,%s\n' \
+                printf '%s,%s,%s,%s,%s,%s,%s\n' \
                     "$(basename "$d")" \
                     "$(jq -r '.kind // "?"' "$m")" \
+                    "$(jq -r '.stack // "?"' "$m")" \
                     "$(jq -r '.teamcity_version // "?"' "$m")" \
                     "$(jq -r 'if .postgres_major == "" then "-" else (.postgres_major // "-") end' "$m")" \
                     "$(du -sh "$d" | cut -f1)" \
                     "$(jq -r '.created // "?"' "$m" | cut -dT -f1)"
             else
-                printf '%s,incomplete,-,-,%s,-\n' "$(basename "$d")" "$(du -sh "$d" | cut -f1)"
+                printf '%s,incomplete,-,-,-,%s,-\n' "$(basename "$d")" "$(du -sh "$d" | cut -f1)"
             fi
         done
     } | column -t -s, >&2
@@ -405,6 +435,17 @@ backup::restore() {
 
     local pick; pick=$(ui::choose 'Restore which archive?' "${names[@]}") || return 0
     local dir="$BACKUP_DIR/$pick" manifest="$BACKUP_DIR/$pick/manifest.json"
+
+    # Names cannot carry it, so nothing on the chooser distinguishes an archive
+    # taken from a different stack. Restoring one is a legitimate thing to want —
+    # cloning an instance — but never a thing to do by accident.
+    local owner; owner=$(backup::_archive_stack "$dir")
+    if [[ -n $owner && $owner != "$TC_STACK" ]]; then
+        ui::blank
+        ui::warn "That archive was taken from the stack '$owner', not '$TC_STACK'."
+        ui::note "Its volumes will be restored into $TC_STACK's, replacing them."
+        ui::confirm "Restore $owner's backup into $TC_STACK?" || return 0
+    fi
 
     backup::_show_manifest "$manifest"
     backup::_check_compatible "$manifest" || return 1

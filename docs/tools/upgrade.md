@@ -28,19 +28,42 @@ one-time token, which it prints **to the server log and nowhere else**.
 
 Left to find it yourself, you see a page asking for a token with no indication of where it comes
 from, and it looks like the upgrade has hung. The console tails the log, extracts the token and
-prints it:
+prints it, along with what TeamCity is actually waiting for:
 
 ```
-warn   TeamCity needs you to confirm the data directory upgrade.
+warn   TeamCity is waiting for you: Confirm the data directory upgrade
          1. Open  http://localhost:8111
-         2. Enter this token:
+         2. Enter this token, leaving the username blank:
 
-              4f8a1c9e2b7d
+              8490157034461772482
 
-         3. Confirm the upgrade and wait for it to finish.
+         3. Complete the step it shows, then wait for it to finish.
+
+       This is not a hang; nothing further happens until that is done.
+       If it goes wrong, roll back with:  ./tc restore  →  teamcity-cold-20260728-162003
 ```
 
 If the version change needed no confirmation, it says so and finishes.
+
+### Why the reason is quoted rather than assumed
+
+That first line used to read "TeamCity needs you to confirm the data directory upgrade" every
+time — and it is not always true. TeamCity serves the same 503 maintenance page for several
+different demands: the licence agreement, a data directory upgrade, the first administrator. Over
+HTTP they are indistinguishable, and upgrading a server whose first run had never been completed
+produced confident instructions for a step it was not on.
+
+No guessing is necessary. The page carries its own stage, unauthenticated, in an HTML comment:
+
+```html
+<!--
+Page: maintenance-welcome
+Stage: LICENSE_AGREEMENT_SCREEN
+[Stage description: Review and accept TeamCity license agreement to continue using the product]
+```
+
+The console reads the description and repeats it verbatim. When the marker is missing it says
+plainly that the maintenance page needs attention, rather than inventing a step.
 
 ## Rolling back
 
@@ -71,6 +94,10 @@ $EDITOR stack/.env      # TC_STACK='rehearsal'  TC_PORT='8112'  TC_AGENTS='0'  T
 `TC_AGENTS='0'` and `TC_DB='hsqldb'` keep it to a single container, so the only cost is pulling the
 one server image. Tear it down with `./tc reset` when you are done — it shares no volumes, network
 or containers with your real stack.
+
+> A rehearsal stack shares one thing: `backups/`, if you rehearse in place rather than in a copy.
+> Retention reads each archive's manifest and only counts the current stack's, so a rehearsal
+> cannot prune your real backups — see [backup](backup.md#retention-and-disk).
 
 ## Upgrading PostgreSQL
 

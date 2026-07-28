@@ -81,6 +81,40 @@ stack::server_state() {
 
 stack::server_ready() { [[ $(stack::server_state) == ready ]]; }
 
+# What the maintenance page is actually waiting for, in TeamCity's own words.
+#
+# "setup" covers several different demands — the licence agreement, a data
+# directory upgrade, a database step — and they look identical over HTTP. Guessing
+# between them produces confidently wrong instructions: an upgrade run against a
+# server that had never finished its first setup was told to "confirm the data
+# directory upgrade" while TeamCity was in fact showing the licence agreement.
+#
+# No guessing is needed. The page carries both a stage name and a description in
+# an HTML comment, served without authentication:
+#
+#     <!--
+#     Page: maintenance-welcome
+#     Stage: LICENSE_AGREEMENT_SCREEN
+#     [Stage description: Review and accept TeamCity license agreement to continue using the product]
+#
+# Empty output means the marker was absent — say nothing rather than invent it.
+stack::maintenance_stage() {
+    stack::_maintenance_page | sed -n 's/^[[:space:]]*Stage:[[:space:]]*\([A-Z_]\{1,\}\)[[:space:]]*$/\1/p' | head -1
+}
+
+stack::maintenance_reason() {
+    stack::_maintenance_page \
+        | sed -n 's/^[[:space:]]*\[Stage description:[[:space:]]*\(.*\)\][[:space:]]*$/\1/p' | head -1
+}
+
+# Deliberately not `curl -f`: the maintenance page is served with 503, which is
+# exactly the status -f throws the body away for. And the host address, not
+# conf::url — that one is for printing to the user, and localhost inside this
+# container is this container.
+stack::_maintenance_page() {
+    curl -sS --max-time 5 "http://host.docker.internal:$TC_PORT/" 2>/dev/null | head -20
+}
+
 # Up enough to talk to, whether or not first-run setup is done.
 stack::server_responding() { [[ $(stack::server_state) != starting ]]; }
 

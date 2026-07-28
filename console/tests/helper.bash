@@ -47,6 +47,17 @@ load_libs() {
     ui::ok()   { :; }
 }
 
+# Undo that silence.
+#
+# Most tests assert on return codes, so quiet is right for them. A few assert on
+# what the user is actually told — an upgrade that announces the wrong step is a
+# real defect and a passing exit code hides it — and those need the genuine
+# implementations back.
+ui_speaks() {
+    # shellcheck disable=SC1090
+    source "$LIB/ui.sh"
+}
+
 # A known-good configuration, so each test only varies what it is about.
 default_conf() {
     TC_STACK=teamcity
