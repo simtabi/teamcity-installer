@@ -7,9 +7,10 @@
 
 Requires Docker (OrbStack or Docker Desktop) with the Compose v2 plugin.
 
-> **Tested on macOS/arm64 only.** Linux and Windows via WSL 2 are expected to work — the launcher
-> uses no tool or flag that is missing there, and tests assert those absences — but neither has been
-> run on a real host. See [platforms](docs/platforms.md); reports from either are welcome.
+> **Tested on macOS/arm64 and Linux/x86-64.** CI stands the stack up from nothing on Linux and runs
+> the live checks against it, up to TeamCity's licence gate, which cannot be accepted unattended.
+> **WSL 2 is expected to work but has not been run on a real host.** See
+> [platforms](docs/platforms.md); reports welcome.
 
 ## Install
 

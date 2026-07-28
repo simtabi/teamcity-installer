@@ -11,7 +11,7 @@ What you need, what the first run does, and how to remove everything again.
 | Memory | 4 GiB allocated to Docker minimum, 6 GiB or more comfortable |
 | Disk | ~10 GiB for images, plus whatever your builds produce |
 | Architecture | arm64 and amd64 are both published; arm64 runs natively on Apple Silicon |
-| Platform | macOS, Linux or WSL 2 — **only macOS/arm64 has been exercised**, see [platforms](platforms.md) |
+| Platform | macOS and Linux are exercised; **WSL 2 is untested** — see [platforms](platforms.md) |
 
 Nothing else. No Java, no Tomcat, no PostgreSQL client. `./tc` uses only the `docker` binary.
 

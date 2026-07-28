@@ -6,17 +6,31 @@ Where this runs, what was done to make that true, and — plainly — what has a
 
 | Platform | Status |
 |---|---|
-| macOS, Apple Silicon | developed and tested here |
+| macOS, Apple Silicon | developed and tested here, including a full first-run and restore |
+| Linux, x86-64 | a full stack stood up and verified in CI on every scheduled run — see below |
 | macOS, Intel | expected to work; same code path, different image architecture |
-| Linux (x86-64, arm64) | expected to work; portability asserted by tests, not run on a real host |
+| Linux, arm64 | expected to work; same code path as x86-64, which is exercised |
 | Windows via WSL 2 | expected to work; portability asserted by tests, not run on a real host |
 | Windows without WSL | not supported |
 
-> **What "tested" means here.** The suite runs on macOS/arm64. Linux and WSL support comes from
-> removing every tool and flag that is not universally present, and from tests that assert those
-> absences — `tc` parses under both POSIX `sh` and busybox `ash`, and is checked for `shasum`,
-> `sort -z` and GNU-only flags. That is a real guard against the usual portability failures, but it
-> is not the same as having been run on those hosts. Reports from either are welcome.
+> **What "tested" means here, precisely.**
+>
+> **macOS/arm64** is where this was developed: full first-run, upgrade, backup, restore and reset.
+>
+> **Linux/x86-64** is exercised by the `e2e` CI job, which stands the stack up from nothing on
+> `ubuntu-latest` and runs the live checks against it. As of the first run: 12 volumes with none
+> anonymous, the timezone applied, PostgreSQL accepting connections, `database.properties` seeded,
+> the data directory writable by uid 1000, and a 321 MB cold backup taken. That job also covers the
+> **minimal agent image**, which correctly maps 7 volumes rather than 8.
+>
+> It stops at TeamCity's licence agreement, which cannot be accepted unattended — so the REST,
+> agent-authorization and native-backup checks skip there. Everything up to that gate is proven on
+> Linux; everything past it is proven only on macOS.
+>
+> **WSL 2** is still unexercised. Support for it comes from removing every tool and flag that is not
+> universally present, and from tests asserting those absences — `tc` parses under both POSIX `sh`
+> and busybox `ash`, and is checked for `shasum`, `sort -z` and GNU-only flags. That guards the
+> usual portability failures; it is not the same as having been run there. Reports welcome.
 
 ## Why the risk is concentrated in one file
 
