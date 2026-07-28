@@ -104,26 +104,36 @@ backup::prune() {
 
 # --- disk guard ---------------------------------------------------------------
 #
-# A cold backup writes roughly the size of the volumes it copies. Filling the
-# disk mid-backup takes the running stack down with it, so refuse up front and
-# show both numbers rather than letting it fail halfway.
+# A cold or logical backup writes roughly the size of the volumes it copies.
+# Filling the disk mid-backup takes the running stack down with it, so refuse up
+# front and show both numbers rather than letting it fail halfway.
+#
+# The native backup is deliberately *not* guarded. TeamCity writes its own
+# archive — configuration and database, not the caches — and it is a fraction of
+# the data directory: 1.4 MB against 3 GB of volumes on a working stack. Sizing
+# it by the same rule would refuse the one backup that still fits when disk is
+# short, which is precisely when it is the right one to take.
 backup::_free_bytes() {
     df -Pk "$BACKUP_DIR" 2>/dev/null | awk 'NR==2 {print $4 * 1024}'
 }
 
+# Sizes the given volumes, or every volume in the stack when given none.
 backup::_estimate_bytes() {
+    local -a vols=("$@")
+    (( ${#vols[@]} > 0 )) || mapfile -t vols < <(render::volume_names)
+
     local total=0 vol size
-    while IFS= read -r vol; do
+    for vol in "${vols[@]}"; do
         docker volume inspect "$vol" >/dev/null 2>&1 || continue
         size=$(docker run --rm -v "$vol":/v:ro alpine:3.22 du -sk /v 2>/dev/null | awk '{print $1}')
         [[ $size =~ ^[0-9]+$ ]] && total=$(( total + size * 1024 ))
-    done < <(render::volume_names)
+    done
     printf '%s' "$total"
 }
 
 backup::_check_space() {
     local needed free
-    needed=$(backup::_estimate_bytes)
+    needed=$(backup::_estimate_bytes "$@")
     free=$(backup::_free_bytes)
 
     [[ $free =~ ^[0-9]+$ ]] || return 0     # cannot tell; do not block
@@ -298,6 +308,13 @@ backup::_native() {
 backup::_logical() {
     ui::scope backup
     [[ $TC_DB == postgres ]] || { ui::err 'Logical backup applies to the PostgreSQL stack only.'; return 1; }
+
+    # Guarded for the same reason the cold backup is, and more urgently: this one
+    # stops the server partway through, so filling the disk during the datadir tar
+    # leaves a stopped server and a truncated archive. Only the two volumes it
+    # actually writes are sized — charging it for the agent caches it never
+    # touches would refuse backups that would have fitted.
+    backup::_check_space "$(conf::volume datadir)" "$(conf::volume pgdata)" || return 1
 
     local name; name="teamcity-logical-$(backup::_stamp)"
     local dir; dir=$(backup::_dir "$name"); mkdir -p "$dir"

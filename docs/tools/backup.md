@@ -71,8 +71,8 @@ reported, never pruned: retention is worth less than a backup nobody can replace
 restoring one stack's archive into another — a legitimate thing to want when cloning an instance,
 never a thing to do by accident.
 
-Before a cold backup the console estimates the volume sizes, compares them with the free space in
-`backups/`, and refuses when it will not fit — showing both numbers:
+Before a **cold or logical** backup the console estimates the volume sizes, compares them with the
+free space in `backups/`, and refuses when it will not fit — showing the numbers:
 
 ```
 error  Not enough free disk for this backup.
@@ -80,6 +80,22 @@ error  Not enough free disk for this backup.
        estimated need   2.8GB (compressed, plus headroom)
        free in backups/ 1.4GB
 ```
+
+The guard runs **before anything is stopped**. Both kinds take containers down partway through —
+a cold backup the whole stack, a logical one the server — so a refusal that arrived after that
+would leave a stopped server and a truncated archive, which is the failure it exists to prevent.
+
+Each kind is sized on what it actually writes. A cold backup is charged for every volume; a logical
+one only for the data directory and the database, since it never touches the agent caches. Charging
+it for all 29 would refuse backups that would have fitted.
+
+**The native backup is deliberately not guarded.** TeamCity writes its own archive — configuration
+and database, not the caches — and it is a fraction of the data directory: 1.4 MB against 3 GB of
+volumes on a working stack. Sizing it by the same rule would refuse the one backup that still fits
+when disk is short, which is exactly when it is the right one to take.
+
+When the free space cannot be read at all, the backup proceeds. A failed `df` is not evidence of a
+full disk, and a guard that blocks on no information is worse than no guard.
 
 Filling the disk halfway through a backup takes the running stack down with it, which is a worse
 outcome than not starting.
