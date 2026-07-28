@@ -138,7 +138,7 @@ log::result() {
 # --- reading ------------------------------------------------------------------
 
 log::tools() {
-    printf '%s\n' console wizard stack agents backup upgrade doctor verify
+    printf '%s\n' console wizard stack agents admin backup upgrade doctor verify
 }
 
 log::show() {

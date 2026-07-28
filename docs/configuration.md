@@ -30,6 +30,8 @@ rejected with a reason rather than producing a stack that fails later.
 | `TC_AGENT_DOCKER` | `none` | `none`, `dind` or `socket`. Either Docker mode forces the full agent image — the minimal one contains no `docker` binary. See [enable Docker builds](recipes/enable-docker-in-docker.md). |
 | `TC_AGENT_AUTO_AUTHORIZE` | `1` | Agents authorize themselves on first connect instead of waiting for approval. See [agents](tools/agents.md). |
 | `TC_AGENT_AUTH_TOKEN` | generated | The shared secret behind the above. Generated once per stack and reused, so agents already holding it stay authorized. Empty disables the feature. |
+| `TC_ADMIN_USER` | `admin` | Username for the first administrator, created automatically when the server has no accounts. |
+| `TC_ADMIN_PASSWORD` | empty | Leave empty to have one generated and shown once. Set it only when you need a known value. |
 | `TC_BACKUP_KEEP` | `5` | Archives to keep; older ones are pruned after each successful backup. |
 | `TC_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARN`, `ERROR` or `OFF`. See [logging](tools/logging.md). |
 

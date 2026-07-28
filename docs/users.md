@@ -20,6 +20,33 @@ first real account.
 
 ## Creating the first administrator
 
+The console does this for you. When the server comes up with no accounts, `./tc up` creates one; you
+can also run it directly:
+
+```sh
+./tc admin
+```
+
+```
+ok     Administrator 'admin' created with full system rights.
+
+         username:  admin
+         password:  fAdjvuvpav1CRmTFkgVxQhxdGU1pK9nF
+```
+
+It authenticates with the super user token, creates the account over REST, and grants it
+`SYSTEM_ADMIN` — a new account has no privileges otherwise, and signing in to find you can do
+nothing is a poor welcome.
+
+The password is **generated and shown once**, not written to disk. A second copy in `stack/.env`
+would go stale the moment you changed it in the UI. Set `TC_ADMIN_USER` and `TC_ADMIN_PASSWORD` in
+`stack/.env` if you need known values — for CI, say — and those are used instead.
+
+This runs only when there are **zero** users. It is a bootstrap, not user management: once anybody
+exists, further accounts belong in TeamCity's own UI where roles and groups live.
+
+## Doing it by hand instead
+
 On a fresh stack TeamCity serves a maintenance page before anything else.
 
 **1. Get the token.**

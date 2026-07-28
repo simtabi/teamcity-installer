@@ -34,6 +34,8 @@ source "$LIB_DIR/backup.sh"
 source "$LIB_DIR/upgrade.sh"
 # shellcheck source=doctor.sh
 source "$LIB_DIR/doctor.sh"
+# shellcheck source=admin.sh
+source "$LIB_DIR/admin.sh"
 # shellcheck source=verify.sh
 source "$LIB_DIR/verify.sh"
 
@@ -150,6 +152,7 @@ TC_MENU=(
     'Verify|live end-to-end checks against this stack|verify::run'
     'Doctor|diagnostics and health probes|main::doctor_menu'
     'Token|super user token for first-run setup|stack::token'
+    'Admin|create the first administrator account|admin::bootstrap'
     'Open|show the TeamCity URL|stack::open_url'
     'Shell|open a shell in a container|stack::shell'
     'Reconfigure|change settings, keep data|wizard::run'
@@ -257,6 +260,7 @@ TeamCity control console
   ./tc upgrade             move to another TeamCity version
   ./tc doctor              diagnostics
   ./tc token               super user token for TeamCity's first-run setup
+  ./tc admin               create the first administrator account
   ./tc logs [service]      container logs
   ./tc journal [tool]      this console's own logs (add 'follow' to tail)
   ./tc preflight           check this machine is ready
@@ -310,6 +314,7 @@ main::_scope_for() {
         doctor)                                                  printf 'doctor' ;;
         verify)                                                  printf 'verify' ;;
         install)                                                 printf 'wizard' ;;
+        admin)                                                   printf 'admin' ;;
         *)                                                       printf 'console' ;;
     esac
 }
@@ -339,6 +344,7 @@ main::run_command() {
         upgrade)   upgrade::run ;;
         doctor)    doctor::run ;;
         token)     stack::token ;;
+        admin)     admin::bootstrap ;;
         journal)   log::show "${1:-}" "${2:-}" ;;
         prune)     ui::scope backup; backup::prune ;;
         preflight) preflight::run ;;

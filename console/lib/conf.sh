@@ -34,6 +34,8 @@ BACKUP_DIR="$TC_ROOT/backups"
 : "${TC_JDBC_VERSION:=42.7.13}"
 : "${TC_AGENT_AUTO_AUTHORIZE:=0}"
 : "${TC_AGENT_AUTH_TOKEN:=}"
+: "${TC_ADMIN_USER:=admin}"
+: "${TC_ADMIN_PASSWORD:=}"
 : "${TC_BACKUP_KEEP:=5}"
 : "${TC_LOG_LEVEL:=INFO}"
 
@@ -111,6 +113,11 @@ TC_JDBC_VERSION=$(conf::_quote "$TC_JDBC_VERSION")
 # are authorized explicitly.
 TC_AGENT_AUTO_AUTHORIZE=$(conf::_quote "$TC_AGENT_AUTO_AUTHORIZE")
 TC_AGENT_AUTH_TOKEN=$(conf::_quote "$TC_AGENT_AUTH_TOKEN")
+
+# The first administrator, created automatically when the server comes up with
+# no accounts. Leave the password empty to have one generated and shown once.
+TC_ADMIN_USER=$(conf::_quote "$TC_ADMIN_USER")
+TC_ADMIN_PASSWORD=$(conf::_quote "$TC_ADMIN_PASSWORD")
 
 TC_BACKUP_KEEP=$(conf::_quote "$TC_BACKUP_KEEP")
 TC_LOG_LEVEL=$(conf::_quote "$TC_LOG_LEVEL")

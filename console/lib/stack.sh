@@ -115,7 +115,10 @@ stack::_await_ready() {
             ready)
                 ui::blank
                 ui::ok "TeamCity is up at $(conf::url)"
-                stack::needs_first_user && stack::first_user_hint
+                # A server with no accounts is unusable; creating the first one
+                # needs no browser, so there is no reason to leave it to a
+                # follow-up step someone has to know about.
+                stack::needs_first_user && admin::bootstrap
                 return 0 ;;
             setup)
                 ui::blank

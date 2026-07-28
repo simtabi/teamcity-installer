@@ -77,3 +77,29 @@ setup() {
     tracked=$(git ls-files 'logs/*.log' 'backups/teamcity-*' || true)
     [ -z "$tracked" ] || { echo "tracked runtime artifacts: $tracked"; return 1; }
 }
+
+# --- administrator bootstrap --------------------------------------------------
+
+@test "a generated admin password satisfies the password validator" {
+    load_libs
+    local pw
+    for _ in 1 2 3 4 5; do
+        pw=$(validate::gen_password)
+        run validate::db_password "$pw"
+        [ "$status" -eq 0 ] || { echo "generated a weak password: $pw"; return 1; }
+    done
+}
+
+@test "the example env ships an empty admin password" {
+    local example="$PROJECT/stack/.env.example"
+    grep -qE "^TC_ADMIN_USER='admin'\$"  "$example"
+    grep -qE "^TC_ADMIN_PASSWORD=''\$"   "$example"
+}
+
+@test "the generated admin password is never written to a log" {
+    command -v git >/dev/null || skip 'git unavailable'
+    cd "$PROJECT"
+    # admin.sh must not hand the password to log::, only to the terminal.
+    run grep -nE 'log::[a-z]+ .*\$pass' console/lib/admin.sh
+    [ "$status" -ne 0 ]
+}

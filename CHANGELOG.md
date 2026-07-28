@@ -47,6 +47,12 @@ tools of this kind:
   an existing agent's configuration makes the server treat it as a different agent. Authorization
   is explicit; see [docs/tools/agents.md](docs/tools/agents.md).
 
+### Added after tagging
+
+- **`./tc admin`** — creates the first administrator over REST and grants it `SYSTEM_ADMIN`,
+  automatically when the server comes up with no accounts. A started TeamCity with zero users
+  answers 200 and looks healthy while being impossible to sign in to.
+
 ### Verified
 
 - The **native backup** round-trip (`./tc verify --deep`) runs against a live server: REST-initiated

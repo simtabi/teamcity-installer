@@ -30,7 +30,8 @@ TeamCity's data lives in named Docker volumes.
 The first run asks a handful of questions, then brings up a TeamCity server, a PostgreSQL database
 and three build agents, with the database already configured so TeamCity's own setup wizard skips
 straight to the licence agreement — and it hands you the super user token that page asks for,
-which otherwise lives in a log file inside a Docker volume.
+which otherwise lives in a log file inside a Docker volume. It then creates the first administrator
+account for you, since a started server with no accounts is one nobody can sign in to.
 
 ## <a name="documentation"></a>Documentation
 
