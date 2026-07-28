@@ -324,6 +324,13 @@ main::run_command() {
     ui::scope "$(main::_scope_for "$cmd")"
     log::info console.run "command: $cmd${*:+ $*}"
 
+    # Commands that repair or replace the configuration must not be gated on it
+    # being valid — that would leave a broken stack with no way out.
+    case $cmd in
+        install|reset|help|--help|-h|lint|test|journal|preflight) ;;
+        *) conf::validate || return 1 ;;
+    esac
+
     case $cmd in
         install)   wizard::run ;;
         up|start)  stack::up ;;
@@ -361,6 +368,11 @@ main::run_command() {
 
 main() {
     mkdir -p "$STACK_DIR" "$BACKUP_DIR" "$LOG_DIR"
+
+    # Seed the configuration from the tracked example when it is missing, so a
+    # fresh clone is usable without a separate setup step.
+    conf::exists || conf::bootstrap >/dev/null 2>&1 || true
+
     conf::load || true
     log::info console.session "session $TC_SESSION started (${TC_ROOT})"
 

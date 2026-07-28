@@ -107,3 +107,67 @@ setup() { load_libs; default_conf; }
     grep -qE "^TC_PG_PASSWORD=''\$"    "$ex"
     grep -qE "^TC_ADMIN_PASSWORD=''\$" "$ex"
 }
+
+# --- configuration must be usable from nothing --------------------------------
+#
+# A fresh clone has no stack/.env, and every command that needed one failed with
+# "No stack configured" — including the ones that could have explained how to
+# get one. Seeding from the tracked example makes a clone immediately usable.
+
+@test "a missing .env is created from the example" {
+    default_conf
+    cp "$PROJECT_ROOT/stack/.env.example" "$STACK_DIR/.env.example"
+    rm -f "$ENV_FILE"
+    EXAMPLE_FILE="$STACK_DIR/.env.example"
+
+    ui::info() { :; }
+    conf::bootstrap
+
+    [ -f "$ENV_FILE" ]
+    [ "$(stat -c '%a' "$ENV_FILE")" = '600' ]
+}
+
+@test "bootstrapping supplies a password rather than leaving it empty" {
+    default_conf
+    cp "$PROJECT_ROOT/stack/.env.example" "$STACK_DIR/.env.example"
+    rm -f "$ENV_FILE"
+    EXAMPLE_FILE="$STACK_DIR/.env.example"
+    ui::info() { :; }
+
+    conf::bootstrap
+    conf::load
+    [ -n "$TC_PG_PASSWORD" ]
+    run validate::db_password "$TC_PG_PASSWORD"
+    [ "$status" -eq 0 ]
+}
+
+@test "bootstrapping never overwrites an existing .env" {
+    default_conf
+    conf::save
+    local before; before=$(cat "$ENV_FILE")
+    cp "$PROJECT_ROOT/stack/.env.example" "$STACK_DIR/.env.example"
+    EXAMPLE_FILE="$STACK_DIR/.env.example"
+
+    conf::bootstrap
+    [ "$(cat "$ENV_FILE")" = "$before" ]
+}
+
+@test "validation rejects each kind of broken value" {
+    default_conf
+    conf::save
+    ui::err() { :; }; ui::note() { :; }; ui::blank() { :; }
+
+    TC_PORT=80          ; run conf::validate; [ "$status" -ne 0 ]
+    default_conf; TC_AGENTS=abc      ; run conf::validate; [ "$status" -ne 0 ]
+    default_conf; TC_DB=mysql        ; run conf::validate; [ "$status" -ne 0 ]
+    default_conf; TC_AGENT_IMAGE=big ; run conf::validate; [ "$status" -ne 0 ]
+    default_conf; TC_AGENT_DOCKER=x  ; run conf::validate; [ "$status" -ne 0 ]
+    default_conf; TC_PG_PASSWORD=''  ; run conf::validate; [ "$status" -ne 0 ]
+}
+
+@test "validation accepts a sound configuration" {
+    default_conf
+    conf::save
+    run conf::validate
+    [ "$status" -eq 0 ]
+}

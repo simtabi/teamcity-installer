@@ -95,3 +95,31 @@ on_a_tty() {
     run bash -c "source $LIB/log.sh; source $LIB/ui.sh; ui::ok 'plain please' 2>&1"
     [[ $output != *$'\033'* ]]
 }
+
+# --- prompts must never block on an exhausted stdin ----------------------------
+#
+# Three separate prompts looped or blocked forever when stdin ran out: read
+# fails, the value is empty, the validator rejects it, and round it goes. A
+# piped, redirected or CI run hung indefinitely with no output.
+
+@test "every plain-mode prompt gives up when stdin is exhausted" {
+    local fn
+    for fn in ui::ask ui::secret ui::menu; do
+        run bash -c "
+            source $LIB/log.sh; source $LIB/ui.sh
+            NO_COLOR=1
+            case '$fn' in
+              ui::ask)    ui::ask 'q' '' ;;
+              ui::secret) ui::secret 'q' '' ;;
+              ui::menu)   ui::menu 'h' 'a|x' 'b|y' ;;
+            esac
+        " </dev/null
+        [ "$status" -ne 0 ] || { echo "$fn accepted empty input instead of failing"; return 1; }
+    done
+}
+
+@test "a prompt with a default uses it rather than failing" {
+    run bash -c "source $LIB/log.sh; source $LIB/ui.sh; NO_COLOR=1; ui::ask 'q' 'the-default'" </dev/null
+    [ "$status" -eq 0 ]
+    [[ $output == *the-default* ]]
+}

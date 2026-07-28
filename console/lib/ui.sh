@@ -139,7 +139,14 @@ ui::menu() {
         local i
         for i in "${!labels[@]}"; do printf '  %2d) %s\n' "$((i+1))" "${display[$i]}" >&2; done
         printf 'Selection: ' >&2
-        local pick; read -r pick
+        # Same EOF guard as the prompts: without it a chooser reached with no
+        # stdin blocks forever instead of giving up.
+        local pick
+        if ! read -r pick; then
+            ui::blank
+            ui::err 'No input available to choose from.'
+            return 1
+        fi
         if [[ ! $pick =~ ^[0-9]+$ ]] || (( pick < 1 || pick > ${#labels[@]} )); then
             ui::err 'Not a valid selection.'
             return 1
@@ -281,6 +288,10 @@ ui::choose() {
 
 ui::confirm() {
     local prompt=$1 default=${2:-no}
+    # No EOF guard needed here or in confirm_typed: an exhausted stdin leaves the
+    # reply empty, which fails the match and answers "no". Failing closed is the
+    # right direction for a confirmation, so this is deliberate rather than an
+    # oversight — do not "fix" it into accepting the default.
     if ui::plain; then
         printf '%s [y/N]: ' "$prompt" >&2
         local reply; read -r reply

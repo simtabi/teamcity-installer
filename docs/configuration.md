@@ -2,7 +2,23 @@
 
 Every setting the stack has, where it lives, and what changing it does.
 
-Settings live in `stack/.env`. The wizard writes it; editing it by hand is supported. Values are
+Settings live in `stack/.env`. The wizard writes it; editing it by hand is supported.
+
+**A missing `stack/.env` is created for you.** Any command finds the file absent, copies
+`stack/.env.example`, and fills in a generated database password — so a fresh clone works without a
+separate setup step. An existing file is never overwritten.
+
+**Values are validated before any command acts on them.** This used to happen only when the compose
+file was rendered, so a command that did not render — `status`, `logs`, `token`, `doctor` — ran
+against a broken configuration and failed somewhere less obvious. Now the failure names the setting:
+
+```
+error  TC_PORT is '80'; it must be a number between 1024 and 65535.
+error  stack/.env has values that would make this fail later.
+```
+
+`install`, `reset`, `lint`, `test`, `preflight` and `journal` are exempt, since gating the commands
+that repair a configuration on that configuration being valid would leave no way out. Values are
 single-quoted, and every one is re-validated when the compose file is rendered — a bad edit is
 rejected with a reason rather than producing a stack that fails later.
 

@@ -95,6 +95,10 @@ starts up again.
 Volumes are wiped rather than untarred over. Merging an archive into existing content produces a
 state that matches neither.
 
+> **Archives contain credentials.** `datadir.tgz` carries `database.properties`, and the PostgreSQL
+> volume carries its own copy, both in plaintext. `config.env` alongside them is the same
+> configuration in restorable form. Treat `backups/` as secret material; it is gitignored.
+
 ## Credentials after a restore
 
 An archive carries its own database credentials inside the restored
@@ -103,7 +107,12 @@ whatever it held before, so a restore used to leave the config claiming a passwo
 not have — harmless until the `pgdata` volume was ever recreated, at which point the two disagreed
 and the server could not connect.
 
-Restore now realigns `stack/.env` with the restored data directory and says so.
+Restore now realigns `stack/.env` from the archive's own `config.env` and says so. Settings other
+than credentials — port, agent count, version — are reported when they differ but never changed: a
+restore should not move the port out from under a running system.
+
+Older archives without `config.env` still work; the password is read out of the restored data
+directory instead.
 
 ## Verifying a guard
 

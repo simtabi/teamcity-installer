@@ -42,7 +42,93 @@ BACKUP_DIR="$TC_ROOT/backups"
 # The PostgreSQL JDBC driver TeamCity loads from <datadir>/lib/jdbc.
 TC_JDBC_URL_BASE='https://repo1.maven.org/maven2/org/postgresql/postgresql'
 
+EXAMPLE_FILE="$STACK_DIR/.env.example"
+
 conf::exists() { [[ -f $ENV_FILE ]]; }
+
+# Create stack/.env from the tracked example when it is missing.
+#
+# A fresh clone has no .env, and every command that needed one used to fail with
+# "No stack configured". The example already documents every setting, so seeding
+# from it means the only thing left to supply is a password — and the validator
+# says so precisely rather than the command dying somewhere further in.
+#
+# Never overwrites an existing file.
+conf::bootstrap() {
+    conf::exists && return 0
+    [[ -f $EXAMPLE_FILE ]] || return 1
+
+    mkdir -p "$STACK_DIR"
+    umask 077
+    cp "$EXAMPLE_FILE" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+
+    # A generated password beats leaving the example's empty one in place: the
+    # stack cannot start without it, and nobody benefits from being asked for a
+    # random string they will never type again.
+    local generated; generated=$(validate::gen_password)
+    conf::load
+    TC_PG_PASSWORD=$generated
+    conf::save
+
+    ui::info "Created $ENV_FILE from the example, with a generated database password."
+    log::info console.config 'bootstrapped stack/.env from stack/.env.example'
+    return 0
+}
+
+# Validate everything before a command acts on it.
+#
+# Values were only checked when the compose file was rendered, so a command that
+# did not render — status, logs, token, doctor — would run against a broken
+# configuration and fail somewhere less obvious. Checking up front means the
+# failure names the setting.
+conf::validate() {
+    conf::exists || return 0
+
+    local ok=0
+    validate::stack_name "$TC_STACK"  || ok=1
+    validate::timezone   "$TC_TZ"     || ok=1
+    validate::mem_opts   "$TC_MEM_OPTS" || ok=1
+
+    if [[ ! $TC_PORT =~ ^[0-9]+$ ]] || (( TC_PORT < 1024 || TC_PORT > 65535 )); then
+        ui::err "TC_PORT is '$TC_PORT'; it must be a number between 1024 and 65535."
+        ok=1
+    fi
+
+    if [[ ! $TC_AGENTS =~ ^[0-9]+$ ]]; then
+        ui::err "TC_AGENTS is '$TC_AGENTS'; it must be a number."
+        ok=1
+    fi
+
+    case $TC_DB in
+        postgres)
+            validate::db_identifier "$TC_PG_DB"   || ok=1
+            validate::db_identifier "$TC_PG_USER" || ok=1
+            if [[ -z $TC_PG_PASSWORD ]]; then
+                ui::err 'TC_PG_PASSWORD is empty; the database cannot start without one.'
+                ui::note "Generate one:  openssl rand -base64 64 | tr -dc 'A-Za-z0-9._-' | cut -c1-32"
+                ok=1
+            else
+                validate::db_password "$TC_PG_PASSWORD" || ok=1
+            fi ;;
+        hsqldb) ;;
+        *) ui::err "TC_DB is '$TC_DB'; it must be 'postgres' or 'hsqldb'."; ok=1 ;;
+    esac
+
+    case $TC_AGENT_IMAGE in full|minimal) ;; *)
+        ui::err "TC_AGENT_IMAGE is '$TC_AGENT_IMAGE'; it must be 'full' or 'minimal'."; ok=1 ;;
+    esac
+    case $TC_AGENT_DOCKER in none|dind|socket) ;; *)
+        ui::err "TC_AGENT_DOCKER is '$TC_AGENT_DOCKER'; it must be 'none', 'dind' or 'socket'."; ok=1 ;;
+    esac
+
+    (( ok == 0 )) || {
+        ui::blank
+        ui::err 'stack/.env has values that would make this fail later.'
+        ui::note "Fix them in $ENV_FILE, or delete it and run  ./tc install"
+        return 1
+    }
+}
 
 # Parsed, not sourced. Two reasons, both of which bit during development:
 #

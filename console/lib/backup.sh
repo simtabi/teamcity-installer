@@ -164,7 +164,23 @@ backup::_write_manifest() {
 
     # The rendered stack travels with the archive so a restore is self-describing.
     cp "$COMPOSE_FILE" "$dir/docker-compose.yml" 2>/dev/null || true
-    sed 's/^TC_PG_PASSWORD=.*/TC_PG_PASSWORD=<redacted>/' "$ENV_FILE" >"$dir/env.txt" 2>/dev/null || true
+
+    # Two copies of the configuration, for two different readers.
+    #
+    # env.txt is redacted and meant for a human skimming what the archive holds.
+    #
+    # config.env is the real thing, because a restore has to be able to put the
+    # configuration back. Redacting it bought nothing: the archive already
+    # carries the same password in plaintext inside the data directory's
+    # database.properties and inside the PostgreSQL volume. Withholding it from
+    # the one file a restore could use made restores lossy without making the
+    # archive any safer.
+    sed -e 's/^TC_PG_PASSWORD=.*/TC_PG_PASSWORD=<redacted>/' \
+        -e 's/^TC_ADMIN_PASSWORD=.*/TC_ADMIN_PASSWORD=<redacted>/' \
+        "$ENV_FILE" >"$dir/env.txt" 2>/dev/null || true
+
+    cp "$ENV_FILE" "$dir/config.env" 2>/dev/null || true
+    chmod 600 "$dir/config.env" 2>/dev/null || true
 }
 
 # --- create -------------------------------------------------------------------
@@ -404,7 +420,8 @@ backup::restore() {
     # config on disk claims a password the database does not have — harmless
     # until the pgdata volume is ever recreated, at which point the two disagree
     # and the server cannot connect.
-    backup::_realign_db_password
+    backup::_realign_db_password "$dir"
+    backup::_report_config_drift "$dir"
 
     ui::spin 'Starting the stack' -- stack::compose up --detach
     stack::_await_ready
@@ -413,11 +430,22 @@ backup::restore() {
 # Brings stack/.env back in step with the credentials inside the restored
 # data directory.
 backup::_realign_db_password() {
+    local dir=${1:-}
     [[ $TC_DB == postgres ]] || return 0
 
-    local restored
-    restored=$(docker run --rm -v "$(conf::volume datadir)":/d:ro alpine:3.22 \
-        sh -c 'grep "^connectionProperties.password=" /d/config/database.properties 2>/dev/null | cut -d= -f2-' 2>/dev/null)
+    local restored=''
+
+    # Prefer the archive's own configuration; fall back to reading it out of the
+    # restored data directory for archives written before config.env existed.
+    if [[ -n $dir && -f "$dir/config.env" ]]; then
+        restored=$(grep '^TC_PG_PASSWORD=' "$dir/config.env" 2>/dev/null \
+            | sed "s/^TC_PG_PASSWORD='\{0,1\}//;s/'\{0,1\}$//")
+    fi
+
+    if [[ -z $restored ]]; then
+        restored=$(docker run --rm -v "$(conf::volume datadir)":/d:ro alpine:3.22 \
+            sh -c 'grep "^connectionProperties.password=" /d/config/database.properties 2>/dev/null | cut -d= -f2-' 2>/dev/null)
+    fi
 
     [[ -n $restored ]] || return 0
     [[ $restored == "$TC_PG_PASSWORD" ]] && return 0
@@ -425,7 +453,29 @@ backup::_realign_db_password() {
     TC_PG_PASSWORD=$restored
     conf::save
     ui::note 'Database password in stack/.env realigned with the restored archive.'
-    log::info backup.restore 'realigned TC_PG_PASSWORD with the restored data directory'
+    log::info backup.restore 'realigned TC_PG_PASSWORD with the restored configuration'
+}
+
+# Settings that differ between the archive and the current configuration, other
+# than the credentials which are realigned automatically. Reported, never
+# changed: a restore should not silently move the port out from under you.
+backup::_report_config_drift() {
+    local dir=$1
+    [[ -f "$dir/config.env" ]] || return 0
+
+    local -a drift=()
+    local key archived current
+    for key in TC_STACK TC_VERSION TC_PORT TC_TZ TC_DB TC_PG_VERSION TC_AGENTS TC_AGENT_IMAGE TC_AGENT_DOCKER; do
+        archived=$(grep "^$key=" "$dir/config.env" 2>/dev/null | sed "s/^$key='\{0,1\}//;s/'\{0,1\}$//")
+        current=${!key}
+        [[ -n $archived && $archived != "$current" ]] && drift+=("  $key: archive '$archived', now '$current'")
+    done
+
+    (( ${#drift[@]} > 0 )) || return 0
+    ui::blank
+    ui::warn 'The archive was taken with different settings, left as they are:'
+    printf '%s\n' "${drift[@]}" >&2
+    ui::note 'Change them in stack/.env if you want the archived values back.'
 }
 
 backup::_show_manifest() {
