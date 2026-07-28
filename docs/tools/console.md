@@ -44,6 +44,26 @@ Running `./tc` with no arguments opens the menu. Before a stack exists it offers
 
 A failure inside any action reports the file, line and command, then returns to the menu.
 
+**Every action ends visibly.** When one finishes, a bordered prompt names it and waits for enter:
+
+```
+╭──────────────────────────────────────────────────────────────╮
+│  Reset finished — press enter to return to the menu          │
+╰──────────────────────────────────────────────────────────────╯
+```
+
+This used to be a single grey line, which after a screen of compose output was easy to miss — so a
+completed command was indistinguishable from a stuck one. Only submenus and the two handlers that
+own the terminal until you leave them (`Logs`, `Shell`) skip it, and a test enforces that list.
+
+**Nothing waits in silence.** Any operation that can take more than a few seconds reports where it
+is on a fifteen-second cadence:
+
+```
+        still waiting for TeamCity… 45s
+        still waiting for agents to register… 30s
+```
+
 ## Commands
 
 Every menu action has a non-interactive equivalent:

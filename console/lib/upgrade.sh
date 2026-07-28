@@ -126,7 +126,7 @@ upgrade::_watch_maintenance() {
         fi
 
         sleep 5; waited=$(( waited + 5 ))
-        (( waited % 30 == 0 )) && ui::note "still starting… ${waited}s"
+        ui::waiting "$waited" 'starting'
     done
 
     ui::warn 'The server did not come up within 5 minutes.'

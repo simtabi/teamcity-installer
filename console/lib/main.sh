@@ -170,9 +170,13 @@ main::quit() { return 0; }
 
 # Entries whose handler paints its own screen and should not then be interrupted
 # by a "press enter" prompt.
+# Only submenus and the two handlers that own the terminal until the user quits
+# them. Everything else ends with a visible prompt: the wizard and the log viewer
+# used to be exempt, and both finished by silently redrawing the menu — the exact
+# moment someone wonders whether it has hung.
 main::_is_interactive_handler() {
     case $1 in
-        stack::logs|stack::shell|agents::menu|backup::menu|main::doctor_menu|wizard::run|log::show) return 0 ;;
+        stack::logs|stack::shell|agents::menu|backup::menu|main::doctor_menu) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -223,7 +227,7 @@ main::menu() {
         # tearing the console down.
         "$handler" || true
 
-        main::_is_interactive_handler "$handler" || ui::pause
+        main::_is_interactive_handler "$handler" || ui::pause "$choice"
     done
 }
 

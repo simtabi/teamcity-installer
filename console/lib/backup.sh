@@ -29,9 +29,9 @@ backup::menu() {
             'Back|') || return 0
 
         case $choice in
-            'Back up') backup::create; ui::pause ;;
-            Restore)   backup::restore; ui::pause ;;
-            List)      backup::list; ui::pause ;;
+            'Back up') backup::create; ui::pause 'Backup' ;;
+            Restore)   backup::restore; ui::pause 'Restore' ;;
+            List)      backup::list; ui::pause 'List' ;;
             Back)      return 0 ;;
         esac
     done
@@ -231,7 +231,7 @@ backup::_native() {
         state=$(agents::_rest GET '/app/rest/server/backup' '' '' 'text/plain' 2>/dev/null || true)
         [[ $state == *Idle* || -z $state ]] && break
         sleep 5; waited=$(( waited + 5 ))
-        (( waited % 60 == 0 )) && ui::note "still running… ${waited}s"
+        ui::waiting "$waited" 'backing up'
     done
 
     local dir; dir=$(backup::_dir "$name"); mkdir -p "$dir"
@@ -562,11 +562,15 @@ backup::_restore_logical() {
     docker volume rm "$(conf::volume pgdata)" >/dev/null 2>&1 || true
     ui::spin 'Starting a fresh database' -- stack::compose up --detach db
 
+    ui::info 'Waiting for the database to accept connections…'
     local waited=0
     while (( waited < 120 )); do
         stack::compose exec -T db pg_isready -U "$TC_PG_USER" >/dev/null 2>&1 && break
         sleep 3; waited=$(( waited + 3 ))
+        ui::waiting "$waited" 'waiting for the database'
     done
+    (( waited < 120 )) || ui::warn 'The database did not become ready within 120s; loading anyway.'
+
 
     ui::spin 'Loading the dump' -- bash -c "
         docker compose --file '$COMPOSE_FILE' --project-directory '$STACK_DIR' --env-file '$ENV_FILE' \

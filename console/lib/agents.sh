@@ -18,10 +18,10 @@ agents::menu() {
             'Back|') || return 0
 
         case $choice in
-            List)            agents::list; ui::pause ;;
-            Authorize)       agents::authorize; ui::pause ;;
-            Scale)           agents::scale; ui::pause ;;
-            'Prune volumes') agents::prune; ui::pause ;;
+            List)            agents::list; ui::pause 'List' ;;
+            Authorize)       agents::authorize; ui::pause 'Authorize' ;;
+            Scale)           agents::scale; ui::pause 'Scale' ;;
+            'Prune volumes') agents::prune; ui::pause 'Prune volumes' ;;
             Back)            return 0 ;;
         esac
     done
@@ -276,6 +276,7 @@ agents::authorize_pending() {
     (( TC_AGENTS > 0 )) || return 0
     agents::_rest GET /app/rest/server >/dev/null 2>&1 || return 0
 
+    ui::info 'Waiting for agents to register…'
     local waited=0 json count=0
     while (( waited < budget )); do
         json=$(agents::_rest GET '/app/rest/agents?locator=authorized:false&fields=count,agent(id,name)' 2>/dev/null) || break
@@ -289,6 +290,7 @@ agents::authorize_pending() {
         (( known >= TC_AGENTS )) && return 0
 
         sleep 5; waited=$(( waited + 5 ))
+        ui::waiting "$waited" 'waiting for agents to register'
     done
 
     (( count > 0 )) || return 0

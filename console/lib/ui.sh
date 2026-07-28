@@ -383,9 +383,30 @@ ui::hint() {
 
 # --- pause --------------------------------------------------------------------
 
+# ui::pause [what just finished]
+#
+# The end of an action has to be unmistakable. This used to print one grey line,
+# which after a screen of compose output was easy to miss entirely — leaving a
+# finished command looking like a hung one. It is now a bordered prompt naming
+# what completed, so the state is obvious without reading anything.
 ui::pause() {
     ui::plain && return 0
+
+    local what=${1:-}
+    local line='Press enter to return to the menu'
+    [[ -n $what ]] && line="$what finished — press enter to return to the menu"
+
     ui::blank
-    ui::note 'Press enter to return to the menu.'
+    gum style --border rounded --border-foreground "$UI_ACCENT" \
+        --padding '0 2' --width "$(( $(ui::width) - 4 ))" "$line" >&2
+
     read -r _ || true
+}
+
+# A heartbeat for anything that waits. Silence reads as a hang, so a wait longer
+# than a few seconds must say it is still working and for how long.
+ui::waiting() {
+    local seconds=$1 what=$2
+    (( seconds > 0 && seconds % 15 == 0 )) || return 0
+    ui::note "still $what… ${seconds}s"
 }

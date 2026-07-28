@@ -123,3 +123,45 @@ on_a_tty() {
     [ "$status" -eq 0 ]
     [[ $output == *the-default* ]]
 }
+
+# --- an action must never look like it hung ------------------------------------
+#
+# A finished command that silently redraws the menu is indistinguishable from a
+# stuck one. The return prompt used to be a single grey line — invisible after a
+# screen of compose output — and the wizard and log viewer skipped it entirely.
+
+@test "the return prompt names what finished and is not muted" {
+    # Stub read rather than redirecting stdin: a redirect would make stdin a
+    # pipe, ui::plain would be true, and pause would correctly print nothing —
+    # testing the wrong branch.
+    run on_a_tty "
+        source $LIB/log.sh; source $LIB/ui.sh
+        read() { return 0; }
+        ui::pause 'Reset'"
+    [[ $output == *Reset* ]]
+    [[ $output == *'return to the menu'* ]]
+}
+
+@test "only submenus and terminal-owning handlers skip the prompt" {
+    source "$LIB/log.sh"; source "$LIB/main.sh"
+    local handler
+    for handler in stack::up stack::down stack::reset wizard::run log::show \
+                   stack::token admin::bootstrap verify::run upgrade::run; do
+        run main::_is_interactive_handler "$handler"
+        [ "$status" -ne 0 ] || { echo "$handler skips the return prompt"; return 1; }
+    done
+    for handler in agents::menu backup::menu main::doctor_menu stack::logs stack::shell; do
+        run main::_is_interactive_handler "$handler"
+        [ "$status" -eq 0 ] || { echo "$handler should own the terminal"; return 1; }
+    done
+}
+
+@test "every wait loop reports progress" {
+    local f offenders=''
+    for f in "$LIB"/*.sh; do
+        awk '/while \(\( *waited/ { l=1; b="" } l { b = b "\n" $0 }
+             l && /done$/ { l=0; if (b !~ /ui::waiting|ui::note|ui::info/) print FILENAME }' "$f"
+    done | sort -u | while read -r bad; do echo "silent wait in $bad"; done > /tmp/silent.$$
+    offenders=$(cat /tmp/silent.$$); rm -f /tmp/silent.$$
+    [ -z "$offenders" ] || { echo "$offenders"; return 1; }
+}

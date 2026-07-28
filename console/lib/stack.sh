@@ -143,7 +143,7 @@ stack::_await_ready() {
 
         sleep 5
         waited=$(( waited + 5 ))
-        (( waited % 30 == 0 )) && ui::note "still waiting… ${waited}s"
+        ui::waiting "$waited" 'waiting for TeamCity'
     done
 
     ui::warn "No HTTP response after ${limit}s."

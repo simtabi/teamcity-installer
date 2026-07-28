@@ -13,7 +13,8 @@ TC    := ./tc
 .DEFAULT_GOAL := help
 .PHONY: help perms up down start stop restart status logs journal token admin \
         shell open doctor verify verify-deep preflight install reconfigure \
-        agents authorize backup restore prune upgrade reset lint test check clean
+        agents authorize backup restore prune upgrade reset lint test check \
+        drift clean
 
 ## help: list the targets
 help:
@@ -143,8 +144,39 @@ lint: perms
 test: perms
 	@$(TC) test
 
-## check: lint, test and verify — what CI runs
-check: lint test verify
+## check: lint, test, verify, and no tracked file changed — what CI runs
+check: perms
+	@# Snapshot the tree, run the gates, compare.
+	@#
+	@# The behavioural checks only cover what someone thought to check. A stray
+	@# edit once left a real local timezone in the tracked stack/.env.example —
+	@# a file every new user is handed — and make check stayed green throughout,
+	@# because nothing was looking at whether files had moved.
+	@#
+	@# Comparing before and after catches side effects nobody predicted, while
+	@# leaving your own in-progress edits alone: only changes the run itself
+	@# causes are failures.
+	@# Temp files rather than process substitution: SHELL is /bin/sh here, and
+	@# <(...) is a bashism that fails on a POSIX shell.
+	@b=$$(mktemp); a=$$(mktemp); \
+	 git status --porcelain 2>/dev/null | sort > "$$b" || true; \
+	 $(MAKE) --no-print-directory lint test verify; rc=$$?; \
+	 git status --porcelain 2>/dev/null | sort > "$$a" || true; \
+	 if [ $$rc -ne 0 ]; then rm -f "$$b" "$$a"; exit $$rc; fi; \
+	 if ! cmp -s "$$b" "$$a"; then \
+	     printf '\n\033[38;5;203merror\033[0m   running the checks modified tracked files:\n'; \
+	     diff "$$b" "$$a" | grep -E '^[<>]' | sed 's/^/        /'; \
+	     printf '        Nothing here should write to a tracked file.\n'; \
+	     rm -f "$$b" "$$a"; exit 1; \
+	 fi; \
+	 rm -f "$$b" "$$a"; \
+	 printf '\n\033[38;5;42mok\033[0m      lint, tests, live checks, and no tracked file moved.\n'
+
+## drift: check the working tree matches the last commit
+drift: perms
+	@if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then \
+	    printf 'uncommitted changes:\n'; git status --short; exit 1; \
+	 else printf 'working tree is clean\n'; fi
 
 ## clean: prune stale console images and old backups
 clean: perms
