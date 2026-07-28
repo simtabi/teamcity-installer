@@ -3,6 +3,48 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-07-28
+
+Everything below was found by running the tool against a live server, not by reading the code.
+
+### Added
+
+- **`./tc admin`** — creates the first administrator over REST and grants it `SYSTEM_ADMIN`,
+  automatically when the server comes up with no accounts. A started TeamCity with zero users
+  answers 200 and looks healthy while being impossible to sign in to.
+- **Unattended agent authorization** during `up`, so a fresh install needs no follow-up command.
+- **A missing `stack/.env` is created** from the tracked example with a generated password. A fresh
+  clone previously failed every command with "No stack configured".
+- **Configuration is validated before any command acts on it**, naming the offending setting rather
+  than failing somewhere less obvious later.
+- **`./tc shell`, `./tc open`, `./tc reconfigure`, `./tc prune`** — previously menu-only or
+  missing, so nothing using them could be scripted. Every command now has a `make` target, and
+  tests hold the menu, CLI and `make` surfaces in step.
+- **Logging** — one file per tool under `logs/`, with session ids, secret redaction and rotation.
+
+### Fixed
+
+- **The interactive menu was broken.** `ui::spin` passed shell functions to `gum spin`, which execs
+  a binary; 16 call sites failed under a terminal. Every test had run without one, so the suite
+  exercised the branch that worked. A pseudo-terminal harness now covers the branch users hit.
+- **Every native backup failed**, reported as a permissions error. It was content negotiation:
+  `/app/rest/server/backup` returns 406 to an `Accept: application/json` request.
+- **CI had failed on every push** while `make check` passed locally — git refused to operate on the
+  bind-mounted checkout as root.
+- **Three prompts blocked forever** on an exhausted stdin, hanging any piped or CI run.
+- Restores could not put credentials back, because the only configuration in an archive was
+  redacted — while the same password sat in plaintext elsewhere in the same archive.
+- `./tc token` now verifies the token against the server; it rotates on every restart, and a stale
+  one is rejected with a message that does not mention staleness.
+- The backup check runs by default: the native tier never paused the server, contrary to its own
+  skip message.
+
+### Removed
+
+- **Agent auto-authorization.** Implemented against TeamCity's documented
+  `teamcity.agentAutoAuthorize.authorizationToken` and removed after verification: the server reads
+  the property and matching agents still register as Unauthorized. Authorization is explicit.
+
 ## [0.1.0] — 2026-07-27
 
 First public release. Pins TeamCity **2026.1.3** against the official JetBrains images.
@@ -64,4 +106,5 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.2.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.2.0
 [0.1.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.1.0
