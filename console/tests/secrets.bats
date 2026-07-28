@@ -39,7 +39,7 @@ setup() {
 
     # Every secret-ish key must be present but empty.
     local key
-    for key in TC_PG_PASSWORD TC_AGENT_AUTH_TOKEN; do
+    for key in TC_PG_PASSWORD TC_ADMIN_PASSWORD; do
         grep -qE "^$key=''\$" "$example" \
             || { echo "$key in .env.example is not empty"; return 1; }
     done

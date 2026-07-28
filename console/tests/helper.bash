@@ -9,6 +9,10 @@
 LIB="${BATS_TEST_DIRNAME}/../lib"
 
 load_libs() {
+    # load_libs repoints TC_ROOT at a scratch directory, so remember where the
+    # real project is for tests that need to read tracked files.
+    PROJECT_ROOT="${TC_ROOT:-$PWD}"
+
     # shellcheck disable=SC1090
     source "$LIB/ui.sh"
 
