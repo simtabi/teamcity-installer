@@ -201,10 +201,10 @@ backup::_native() {
 
     if ! agents::_rest POST \
         "/app/rest/server/backup?includeConfigs=true&includeDatabase=true&includeBuildLogs=true&includePersonalChanges=true&fileName=$name" \
-        '' 'text/plain' >/dev/null 2>&1
+        '' 'text/plain' 'text/plain' >/dev/null 2>&1
     then
         ui::err 'TeamCity refused to start a backup.'
-        ui::note 'The token needs server administration rights for this.'
+        ui::note 'The account needs server administration rights for this.'
         return 1
     fi
 
@@ -212,7 +212,7 @@ backup::_native() {
     local waited=0
     while (( waited < 1800 )); do
         local state
-        state=$(agents::_rest GET '/app/rest/server/backup' 2>/dev/null || true)
+        state=$(agents::_rest GET '/app/rest/server/backup' '' '' 'text/plain' 2>/dev/null || true)
         [[ $state == *Idle* || -z $state ]] && break
         sleep 5; waited=$(( waited + 5 ))
         (( waited % 60 == 0 )) && ui::note "still running… ${waited}s"

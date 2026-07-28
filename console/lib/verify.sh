@@ -305,8 +305,14 @@ verify::_backup() {
         return
     fi
 
-    if [[ $(stack::server_state) != ready ]] || ! conf::token >/dev/null 2>&1; then
-        verify::_skip 'native backup round-trip' 'needs a set-up server and an access token'
+    # REST reachability is the real precondition; a stored access token is not,
+    # since agents::_rest falls back to the super user token.
+    if [[ $(stack::server_state) != ready ]]; then
+        verify::_skip 'native backup round-trip' 'server not past first-run setup'
+        return
+    fi
+    if ! agents::_rest GET /app/rest/server >/dev/null 2>&1; then
+        verify::_skip 'native backup round-trip' 'REST API not reachable'
         return
     fi
 

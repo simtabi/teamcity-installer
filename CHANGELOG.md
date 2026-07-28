@@ -47,6 +47,12 @@ tools of this kind:
   an existing agent's configuration makes the server treat it as a different agent. Authorization
   is explicit; see [docs/tools/agents.md](docs/tools/agents.md).
 
+### Verified
+
+- The **native backup** round-trip (`./tc verify --deep`) runs against a live server: REST-initiated
+  archive, copied out of the data directory, manifest written, cleaned up.
+- **Agent authorization** over REST, using the super user token — no personal access token needed.
+
 ### Known limitations
 
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable

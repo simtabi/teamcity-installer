@@ -108,3 +108,34 @@ LOG
     run bash -c "$(declare -f fixture stack::_parse_super_user_token); fixture | stack::_parse_super_user_token"
     [[ $output =~ ^[0-9]+$ ]]
 }
+
+# --- REST content negotiation -------------------------------------------------
+#
+# /app/rest/server/backup answers with a bare filename and returns 406 to an
+# Accept: application/json request. The hardcoded JSON Accept header made every
+# native backup fail, reported as "TeamCity refused to start a backup" — a
+# permissions message for a content-negotiation problem.
+
+@test "the REST helper lets the caller choose Accept" {
+    source "$LIB/agents.sh"
+    conf::token() { printf 'tok'; }
+    local seen=''
+    curl() { seen="$*"; printf ''; }
+
+    agents::_rest GET /x '' '' 'text/plain' >/dev/null 2>&1 || true
+    [[ $seen == *'Accept: text/plain'* ]] || { echo "got: $seen"; return 1; }
+}
+
+@test "Accept defaults to JSON for ordinary endpoints" {
+    source "$LIB/agents.sh"
+    conf::token() { printf 'tok'; }
+    local seen=''
+    curl() { seen="$*"; printf ''; }
+
+    agents::_rest GET /app/rest/server >/dev/null 2>&1 || true
+    [[ $seen == *'Accept: application/json'* ]] || { echo "got: $seen"; return 1; }
+}
+
+@test "the native backup asks for text/plain" {
+    grep -q "'text/plain' 'text/plain'" "$LIB/backup.sh"
+}

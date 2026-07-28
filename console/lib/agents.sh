@@ -56,9 +56,14 @@ agents::_auth_args() {
     return 2
 }
 
-# agents::_rest <method> <path> [body] [content-type]
+# agents::_rest <method> <path> [body] [content-type] [accept]
+#
+# The Accept header is overridable because not every endpoint speaks JSON:
+# /app/rest/server/backup answers with a bare filename and returns 406 to an
+# Accept: application/json request — which surfaced as "TeamCity refused to
+# start a backup", blaming permissions for a content-negotiation failure.
 agents::_rest() {
-    local method=$1 path=$2 body=${3:-} ctype=${4:-application/json}
+    local method=$1 path=$2 body=${3:-} ctype=${4:-application/json} accept=${5:-application/json}
 
     local -a auth=()
     mapfile -t auth < <(agents::_auth_args) || return 2
@@ -68,7 +73,7 @@ agents::_rest() {
         --silent --show-error --fail --max-time "${TC_REST_TIMEOUT:-20}"
         --request "$method"
         "${auth[@]}"
-        --header 'Accept: application/json'
+        --header "Accept: $accept"
     )
     [[ -n $body ]] && args+=(--header "Content-Type: $ctype" --data "$body")
 
