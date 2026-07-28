@@ -39,6 +39,22 @@ TC_AGENT_VOLUMES=(
 # Docker-in-Docker is switched on. Mapping it only in the DinD branch left three
 # anonymous volumes behind on a default three-agent stack — precisely the leak
 # the explicit mapping exists to prevent. The minimal image does not declare it.
+# The group that owns the Docker socket, as the daemon exposes it.
+#
+# Mounting the socket into the agent is not enough on its own: the agent runs as
+# uid 1000 with a supplementary "docker" group of its own (999), while the socket
+# is owned by whatever group the host uses — 0 on OrbStack and Docker Desktop, a
+# real docker group on most Linux installs. Mismatched, every docker command in a
+# build fails with "permission denied while trying to connect to the Docker API",
+# and nothing about the configuration looks wrong.
+#
+# The console has the same socket mounted, so it can just look.
+render::_docker_socket_gid() {
+    local gid
+    gid=$(stat -c '%g' /var/run/docker.sock 2>/dev/null)
+    [[ $gid =~ ^[0-9]+$ ]] && printf '%s' "$gid" || printf '0'
+}
+
 render::_agent_has_docker_volume() {
     [[ $TC_AGENT_IMAGE == full || $TC_AGENT_DOCKER == dind ]]
 }
@@ -228,6 +244,9 @@ render::_agent() {
             ;;
         socket)
             docker_vol="$docker_vol"$'\n'"      - /var/run/docker.sock:/var/run/docker.sock"
+            # Supplementary group only — enough to use the socket, without
+            # running the whole agent as root.
+            privileged="    group_add:"$'\n'"      - \"$(render::_docker_socket_gid)\""$'\n'
             ;;
     esac
 

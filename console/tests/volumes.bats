@@ -73,3 +73,55 @@ setup() { load_libs; default_conf; }
     [[ $output != *pgdata* ]]
     [[ $output != *jdbc-cache* ]]
 }
+
+# --- agent Docker modes --------------------------------------------------------
+#
+# Both were documented and neither had ever been run. Socket mode was broken:
+# the socket was mounted, but the agent runs as uid 1000 with its own docker
+# group (999) while the socket is owned by the host's group — 0 on OrbStack and
+# Docker Desktop, a real docker group on most Linux. Mismatched, every docker
+# command in a build fails with "permission denied", and the configuration looks
+# entirely correct.
+
+@test "socket mode grants the socket's own group" {
+    TC_AGENT_DOCKER=socket
+    render::_docker_socket_gid() { printf '117'; }
+
+    run render::_agent 1
+    [[ $output == *'group_add:'* ]]   || { echo 'no group_add emitted'; return 1; }
+    [[ $output == *'"117"'* ]]        || { echo 'the socket group was not used'; return 1; }
+    [[ $output == *'/var/run/docker.sock:/var/run/docker.sock'* ]]
+}
+
+@test "socket mode does not resort to privileged or to running as root" {
+    TC_AGENT_DOCKER=socket
+    render::_docker_socket_gid() { printf '0'; }
+    run render::_agent 1
+    [[ $output != *'privileged: true'* ]] || { echo 'socket mode should not need privileged'; return 1; }
+    [[ $output != *'user: root'* ]]       || { echo 'socket mode should not run as root'; return 1; }
+}
+
+@test "the socket group falls back to 0 when it cannot be read" {
+    run bash -c "
+        source $LIB/log.sh; source $LIB/ui.sh; source $LIB/conf.sh; source $LIB/render.sh
+        stat() { return 1; }
+        render::_docker_socket_gid"
+    [ "$output" = '0' ]
+}
+
+@test "Docker-in-Docker is privileged, uses the sudo image, and keeps its layers" {
+    TC_AGENT_DOCKER=dind
+    run render::_agent 1
+    [[ $output == *'privileged: true'* ]]                  || { echo 'not privileged'; return 1; }
+    [[ $output == *'-linux-sudo'* ]]                       || { echo 'not the sudo image'; return 1; }
+    [[ $output == *'DOCKER_IN_DOCKER: start'* ]]           || { echo 'inner daemon not started'; return 1; }
+    [[ $output == *'agent-1-docker:/var/lib/docker'* ]]    || { echo 'layers would not persist'; return 1; }
+}
+
+@test "the two Docker modes are mutually exclusive in what they emit" {
+    TC_AGENT_DOCKER=dind;   local dind;   dind=$(render::_agent 1)
+    TC_AGENT_DOCKER=socket; local socket; socket=$(render::_agent 1)
+
+    [[ $dind   != *'docker.sock:/var/run/docker.sock'* ]] || { echo 'dind should not mount the host socket'; return 1; }
+    [[ $socket != *'DOCKER_IN_DOCKER'* ]]                 || { echo 'socket mode should not start an inner daemon'; return 1; }
+}

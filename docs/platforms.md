@@ -60,6 +60,12 @@ produced UTC there.
 `$DOCKER_HOST` and then `/var/run/docker.sock`. This matters on macOS with OrbStack, where the
 socket is at `~/.orbstack/run/docker.sock` and the classic path may not exist at all.
 
+**The socket's group, for agents.** With `TC_AGENT_DOCKER='socket'` the agent must belong to the
+group that owns the socket, and that group is not the same everywhere — root on OrbStack and
+Docker Desktop, a distribution-specific docker group on Linux. It is read at render time rather
+than assumed, so the compose file is correct for the machine that generated it. See
+[enable Docker builds](recipes/enable-docker-in-docker.md).
+
 **`host.docker.internal`.** Present by default on Docker Desktop and OrbStack, absent on plain
 Linux. The launcher always passes `--add-host host.docker.internal:host-gateway`.
 
