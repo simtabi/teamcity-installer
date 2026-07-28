@@ -119,3 +119,25 @@ setup() {
     [ "$status" -eq 0 ] || { echo "$output"; return 1; }
     [[ $output != *"dubious ownership"* ]]
 }
+
+# --- the example must stay machine-neutral ------------------------------------
+#
+# It is tracked and shipped, so it must not carry anything specific to whoever
+# last touched it. A stray edit had put a real local timezone in place of UTC,
+# which would have handed every new user someone else's clock.
+
+@test "the example ships neutral defaults, not one machine's settings" {
+    local ex="${PROJECT:?}/stack/.env.example"
+
+    grep -qE "^TC_TZ='UTC'\$"          "$ex" || { echo 'TC_TZ is not the neutral UTC'; return 1; }
+    grep -qE "^TC_STACK='teamcity'\$"  "$ex" || { echo 'TC_STACK is not the default'; return 1; }
+    grep -qE "^TC_PORT='8111'\$"       "$ex" || { echo 'TC_PORT is not the default'; return 1; }
+    grep -qE "^TC_ADMIN_USER='admin'\$" "$ex" || { echo 'TC_ADMIN_USER is not the default'; return 1; }
+}
+
+@test "nothing in the console writes to the example" {
+    # It is an input, never an output. A tool that rewrote it would quietly turn
+    # one person's configuration into everyone's defaults.
+    run grep -rnE '>[[:space:]]*"?\$?\{?EXAMPLE_FILE|>[[:space:]]*.*\.env\.example' "$LIB"
+    [ "$status" -ne 0 ] || { echo "$output"; return 1; }
+}
