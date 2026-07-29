@@ -3,6 +3,19 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-07-29
+
+### Fixed
+
+- **A booting server was treated as one awaiting first-run setup.** TeamCity serves its maintenance
+  page from the moment it has a web connector, including while it is still starting its own
+  components, so answering there says nothing about whether it wants anything. A stack restored
+  from a backup — licence long accepted, administrator already present — was told to accept a
+  licence and create an administrator, and handed a super user token to do it with, purely because
+  it had not finished booting. The page publishes `Stage: APPLICATION_STARTING`; that is now read
+  and reported as *starting*. Everything downstream inherits the correction: `verify`, the upgrade
+  watcher, and the guidance printed after `up` and after a restore.
+
 ## [0.3.1] — 2026-07-29
 
 ### Fixed
@@ -192,6 +205,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.3.2]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.2
 [0.3.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.1
 [0.3.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.0
 [0.2.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.2.0

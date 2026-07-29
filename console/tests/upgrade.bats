@@ -155,3 +155,48 @@ watch() { upgrade::_watch_maintenance "$@" 2>&1; }
     [[ $output == *'verify::_pass'* ]]
     [[ $output == *'awaiting first-run setup'* ]]
 }
+
+# --- booting is not the same as waiting for you --------------------------------
+
+@test "a still-booting server reads as starting, not as awaiting setup" {
+    stack::_probe() { [[ $1 == /mnt ]] && printf '200' || printf '503'; }
+    stack::maintenance_stage() { printf 'APPLICATION_STARTING'; }
+    [ "$(stack::server_state)" = 'starting' ]
+}
+
+@test "a server genuinely awaiting the licence still reads as setup" {
+    stack::_probe() { [[ $1 == /mnt ]] && printf '200' || printf '503'; }
+    stack::maintenance_stage() { printf 'LICENSE_AGREEMENT_SCREEN'; }
+    [ "$(stack::server_state)" = 'setup' ]
+}
+
+@test "an unreadable stage falls back to setup rather than looping forever" {
+    # Silence must not turn a genuine first run into an endless wait.
+    stack::_probe() { [[ $1 == /mnt ]] && printf '200' || printf '503'; }
+    stack::maintenance_stage() { printf ''; }
+    [ "$(stack::server_state)" = 'setup' ]
+}
+
+@test "a server answering on login.html is ready regardless of any stage" {
+    stack::_probe() { printf '200'; }
+    stack::maintenance_stage() { printf 'APPLICATION_STARTING'; }
+    [ "$(stack::server_state)" = 'ready' ]
+}
+
+@test "a server answering nothing is starting, without a page fetch" {
+    stack::_probe() { printf '000'; }
+    stack::maintenance_stage() { echo 'the page should not have been fetched' >&2; printf 'X'; }
+    [ "$(stack::server_state)" = 'starting' ]
+}
+
+@test "a restored stack is not told to create the administrator it already has" {
+    # The regression in one line: booting reads as starting, so nothing downstream
+    # reaches the first-run guidance.
+    stack::_probe() { [[ $1 == /mnt ]] && printf '200' || printf '503'; }
+    stack::maintenance_stage() { printf 'APPLICATION_STARTING'; }
+
+    run stack::server_responding
+    [ "$status" -ne 0 ] || { echo 'a booting server was treated as responding'; return 1; }
+    run stack::server_ready
+    [ "$status" -ne 0 ]
+}

@@ -60,26 +60,7 @@ stack::_probe() {
         "http://host.docker.internal:$TC_PORT$1" 2>/dev/null || printf '000'
 }
 
-# ready | setup | starting
-#
-# A plain "is it 200?" check is wrong for the first run, which is the moment it
-# matters most. Until the licence is accepted and an administrator exists,
-# TeamCity answers *503* on / and /login.html and serves a maintenance page;
-# only /mnt returns 200. Treating that as "not up" means the first ./tc up waits
-# out its whole timeout and reports failure at a server that is running fine and
-# waiting for the user.
-stack::server_state() {
-    case $(stack::_probe /login.html) in
-        200) printf 'ready' ;;
-        000) printf 'starting' ;;
-        *)
-            if [[ $(stack::_probe /mnt) == 200 ]]; then printf 'setup'
-            else printf 'starting'
-            fi ;;
-    esac
-}
-
-stack::server_ready() { [[ $(stack::server_state) == ready ]]; }
+# --- readiness ------------------------------------------------------------------
 
 # What the maintenance page is actually waiting for, in TeamCity's own words.
 #
@@ -114,6 +95,42 @@ stack::maintenance_reason() {
 stack::_maintenance_page() {
     curl -sS --max-time 5 "http://host.docker.internal:$TC_PORT/" 2>/dev/null | head -20
 }
+
+# ready | setup | starting
+#
+# A plain "is it 200?" check is wrong for the first run, which is the moment it
+# matters most. Until the licence is accepted and an administrator exists,
+# TeamCity answers *503* on / and /login.html and serves a maintenance page;
+# only /mnt returns 200. Treating that as "not up" means the first ./tc up waits
+# out its whole timeout and reports failure at a server that is running fine and
+# waiting for the user.
+#
+# The converse is just as wrong, and cost more. Answering on /mnt is not the same
+# as wanting something: TeamCity serves that page from the moment it has a web
+# connector, including while it is still starting its own components. A stack
+# restored from a backup — licence long accepted, administrator already present —
+# was therefore told to accept a licence and create an administrator, and handed a
+# super user token to do it with, purely because it had not finished booting.
+# Everything downstream inherits this: verify, the upgrade watcher, and the
+# guidance printed after `up`.
+#
+# The page says which it is. APPLICATION_STARTING is not a request for input.
+stack::server_state() {
+    case $(stack::_probe /login.html) in
+        200) printf 'ready' ;;
+        000) printf 'starting' ;;
+        *)
+            if [[ $(stack::_probe /mnt) != 200 ]]; then
+                printf 'starting'
+            elif [[ $(stack::maintenance_stage) == APPLICATION_STARTING ]]; then
+                printf 'starting'
+            else
+                printf 'setup'
+            fi ;;
+    esac
+}
+
+stack::server_ready() { [[ $(stack::server_state) == ready ]]; }
 
 # Up enough to talk to, whether or not first-run setup is done.
 stack::server_responding() { [[ $(stack::server_state) != starting ]]; }
