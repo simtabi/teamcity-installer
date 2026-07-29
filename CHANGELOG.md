@@ -3,6 +3,36 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-07-29
+
+The same defect had been fixed three times in three modules. This release fixes the cause instead
+of a fourth symptom. See [why one place owns each fact about the
+server](docs/architecture.md#why-one-place-owns-each-fact-about-the-server).
+
+### Changed
+
+- **One place decides what a not-ready server is waiting for.** `stack::server_state` returns three
+  values for a domain with six distinguishable conditions, so every caller needing more re-derived
+  the difference from context it did not have. Six had independently settled on "awaiting first-run
+  setup" — right for one of the six, wrong for four. `stack::not_ready_reason` and
+  `stack::server_failed` now answer both questions once, from TeamCity's own published stage, and
+  `admin`, `doctor`, `verify`, `status` and the post-`up` guidance all read them.
+- **One place orders archives.** The listing and the restore chooser each carried their own
+  `find | sort`, which orders by kind rather than by date — presenting an older archive above a
+  newer one in a menu chosen from by position. Both now use the ordering retention already had.
+
+### Added
+
+- **Structural tests against a repeat.** No module outside `stack.sh` may state what a not-ready
+  server wants; no code outside `backup::_archives_oldest_first` may order archives; a startup
+  failure is detected in exactly one place. Each was checked by reintroducing the original bug and
+  confirming the suite goes red.
+
+### Fixed
+
+- `./tc doctor` and `./tc admin` described a server that had failed to start as one awaiting
+  first-run setup, and pointed at `./tc token` rather than the server log.
+
 ## [0.3.2] — 2026-07-29
 
 ### Fixed
@@ -205,6 +235,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.4.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.0
 [0.3.2]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.2
 [0.3.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.1
 [0.3.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.0

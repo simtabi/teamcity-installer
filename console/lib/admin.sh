@@ -47,8 +47,12 @@ admin::bootstrap() {
         starting) ui::err 'TeamCity is not answering yet.'
                   ui::note 'Wait for it to finish starting, then try again.'
                   return 1 ;;
-        setup)    ui::err 'TeamCity has not finished its first-run setup.'
-                  ui::note 'Run  ./tc token  and accept the licence agreement first.'
+        setup)    ui::err "TeamCity is not ready: $(stack::not_ready_reason)."
+                  if stack::server_failed; then
+                      ui::note 'It failed to start. Read the cause with:  ./tc logs server'
+                  else
+                      ui::note 'Run  ./tc token  and complete that step first.'
+                  fi
                   return 1 ;;
     esac
 

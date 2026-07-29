@@ -140,21 +140,28 @@ watch() { upgrade::_watch_maintenance "$@" 2>&1; }
 @test "a server that failed to start is not reported as awaiting setup" {
     # Both answer 503 with a maintenance page. Reported as a pass, a wedged
     # server looks like a stack waiting politely for its first administrator.
-    stack::maintenance_stage()  { printf 'EXCEPTION'; }
-    stack::maintenance_reason() { printf 'TeamCity server startup error'; }
+    stack::maintenance_stage() { printf 'EXCEPTION'; }
+    run stack::server_failed
+    [ "$status" -eq 0 ]
 
-    [ "$(stack::maintenance_stage)" = 'EXCEPTION' ]
-    run grep -A10 'setup)' "$LIB/verify.sh"
-    [[ $output == *'EXCEPTION'* ]]       || { echo 'verify does not distinguish a startup error'; return 1; }
-    [[ $output == *'verify::_fail'* ]]   || { echo 'a startup error is still a pass'; return 1; }
-    [[ $output == *'./tc logs server'* ]] || { echo 'no route to the cause'; return 1; }
+    run grep -A8 'setup)' "$LIB/verify.sh"
+    [[ $output == *'stack::server_failed'* ]] || { echo 'verify does not distinguish a startup error'; return 1; }
+    [[ $output == *'verify::_fail'* ]]        || { echo 'a startup error is still a pass'; return 1; }
+    [[ $output == *'./tc logs server'* ]]     || { echo 'no route to the cause'; return 1; }
+}
+
+@test "a licence screen is not mistaken for a startup failure" {
+    stack::maintenance_stage() { printf 'LICENSE_AGREEMENT_SCREEN'; }
+    run stack::server_failed
+    [ "$status" -ne 0 ]
 }
 
 @test "a genuine first run is still a pass, not a failure" {
-    run grep -A10 'setup)' "$LIB/verify.sh"
+    run grep -A8 'setup)' "$LIB/verify.sh"
     [[ $output == *'verify::_pass'* ]]
-    [[ $output == *'awaiting first-run setup'* ]]
+    [[ $output == *'stack::not_ready_reason'* ]]
 }
+
 
 # --- booting is not the same as waiting for you --------------------------------
 
@@ -199,4 +206,42 @@ watch() { upgrade::_watch_maintenance "$@" 2>&1; }
     [ "$status" -ne 0 ] || { echo 'a booting server was treated as responding'; return 1; }
     run stack::server_ready
     [ "$status" -ne 0 ]
+}
+
+# --- one owner per fact --------------------------------------------------------
+
+@test "only stack.sh decides what a not-ready server is waiting for" {
+    # Six modules had independently settled on "awaiting first-run setup", which
+    # is wrong for four of the six conditions TeamCity actually reports. The
+    # phrase may appear once, in the fallback inside stack::not_ready_reason.
+    local f offenders=0
+    for f in "$LIB"/*.sh; do
+        [[ $(basename "$f") == stack.sh ]] && continue
+        # Comments and command help are prose, not a claim about live state.
+        if grep -nE "(ui::(err|warn|note|info|ok)|verify::_(skip|fail|pass)).*first-run setup" "$f" >/dev/null; then
+            echo "$(basename "$f") states the reason itself instead of asking"
+            offenders=$((offenders+1))
+        fi
+    done
+    [ "$offenders" -eq 0 ]
+}
+
+@test "stack.sh states it exactly once, as a fallback" {
+    run grep -c "awaiting first-run setup" "$LIB/stack.sh"
+    [ "$output" -eq 1 ]
+}
+
+@test "every module that reports a blocked server asks for the reason" {
+    local f
+    for f in admin.sh doctor.sh verify.sh; do
+        grep -q 'stack::not_ready_reason' "$LIB/$f" \
+            || { echo "$f reports a blocked server without asking why"; return 1; }
+    done
+}
+
+@test "a startup failure is detected in one place too" {
+    run grep -rn 'EXCEPTION' "$LIB"
+    # Only the definition of stack::server_failed may test for it.
+    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ]
+    [[ $output == *stack.sh* ]]
 }

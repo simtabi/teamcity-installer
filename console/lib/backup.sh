@@ -428,7 +428,10 @@ backup::list() {
     mkdir -p "$BACKUP_DIR"
 
     local -a dirs
-    mapfile -t dirs < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' | sort -r)
+    # Newest first, by age. `sort -r` on the paths ordered by kind instead — see
+    # backup::_archives_oldest_first — so a native archive from yesterday morning
+    # sat above a cold one taken last night.
+    mapfile -t dirs < <(backup::_archives_oldest_first | tac)
 
     if (( ${#dirs[@]} == 0 )); then
         ui::note 'No archives yet.'
@@ -463,8 +466,12 @@ backup::restore() {
     stack::installed || { ui::err 'No stack configured.'; return 1; }
 
     local -a dirs
-    mapfile -t dirs < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' \
-        -exec test -f '{}/manifest.json' ';' -print | sort -r)
+    # Newest first, and by age rather than by name: this list is chosen from by
+    # position, and an older archive presented above a newer one is how the wrong
+    # one gets restored.
+    mapfile -t dirs < <(backup::_archives_oldest_first | tac | while IFS= read -r d; do
+        [[ -f $d/manifest.json ]] && printf '%s\n' "$d"
+    done)
 
     if (( ${#dirs[@]} == 0 )); then
         ui::err 'No complete archives in backups/.'

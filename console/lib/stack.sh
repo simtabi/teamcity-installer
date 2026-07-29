@@ -132,6 +132,39 @@ stack::server_state() {
 
 stack::server_ready() { [[ $(stack::server_state) == ready ]]; }
 
+# Why the server is not usable yet, in one sentence, from a single place.
+#
+# This exists because the same defect was fixed three times in three modules
+# before anyone looked at what they had in common. `server_state` returns one of
+# three values for a domain with at least six distinguishable conditions —
+# booting, licence agreement, data directory upgrade, database setup, startup
+# error, and running-but-with-no-accounts. Every caller that needed more than
+# three re-derived the difference from context it did not have, and each
+# re-derivation was an independent guess. Six of them had settled on "awaiting
+# first-run setup", which is wrong for four of the six conditions: it told a
+# restored stack to accept a licence it had accepted weeks earlier, and would
+# describe a server that had failed to start as one politely waiting for input.
+#
+# Fixing a caller removes one symptom and leaves the cause, which is why it kept
+# coming back. So there is now exactly one answer to "what is it waiting for",
+# and it is TeamCity's own, not ours. Callers phrase the sentence around it; they
+# do not invent it.
+#
+# Empty means ready.
+stack::not_ready_reason() {
+    case $(stack::server_state) in
+        ready)    printf '' ;;
+        starting) printf 'still starting' ;;
+        setup)    local why; why=$(stack::maintenance_reason)
+                  printf '%s' "${why:-awaiting first-run setup}" ;;
+    esac
+}
+
+# A server that failed to start also serves the maintenance page. Answering there
+# is not evidence of health, and telling someone to "complete setup" when the
+# server threw during startup sends them looking in the wrong place entirely.
+stack::server_failed() { [[ $(stack::maintenance_stage) == EXCEPTION ]]; }
+
 # Up enough to talk to, whether or not first-run setup is done.
 stack::server_responding() { [[ $(stack::server_state) != starting ]]; }
 
@@ -305,7 +338,7 @@ stack::show_super_user_token() {
     local token; token=$(stack::super_user_token)
 
     ui::blank
-    ui::info 'TeamCity is waiting for first-run setup. In the browser:'
+    ui::info "TeamCity is waiting for you: $(stack::not_ready_reason). In the browser:"
 
     if [[ -n $token ]]; then
         ui::note '  1. It will ask for a Super User token. Use this one:'
@@ -493,7 +526,12 @@ stack::status() {
             else
                 ui::ok "HTTP ready at $(conf::url)"
             fi ;;
-        setup)    ui::warn "Up at $(conf::url), waiting for first-run setup (licence and admin account)." ;;
+        setup)    if stack::server_failed; then
+                      ui::err "Up at $(conf::url), but TeamCity failed to start: $(stack::not_ready_reason)"
+                      ui::note 'Read the cause with:  ./tc logs server'
+                  else
+                      ui::warn "Up at $(conf::url), waiting for you: $(stack::not_ready_reason)"
+                  fi ;;
         starting) ui::warn "No HTTP response on $(conf::url)" ;;
     esac
 

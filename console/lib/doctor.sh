@@ -70,8 +70,12 @@ doctor::_http() {
                   else
                       ui::note "  $(conf::url)  →  $code, ready"
                   fi ;;
-        setup)    ui::note "  $(conf::url)  →  $code, up but awaiting first-run setup"
-                  ui::note '  It will ask for a super user token first. Get it with:  ./tc token' ;;
+        setup)    ui::note "  $(conf::url)  →  $code, $(stack::not_ready_reason)"
+                  if stack::server_failed; then
+                      ui::note '  TeamCity threw during startup. Read it with:  ./tc logs server'
+                  else
+                      ui::note '  It will ask for a super user token first. Get it with:  ./tc token'
+                  fi ;;
         starting) ui::note "  $(conf::url)  →  no response (still starting, or not running)" ;;
     esac
 }

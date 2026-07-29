@@ -104,13 +104,11 @@ verify::_stack() {
                   # page, and this reported that as a pass — "awaiting first-run
                   # setup" — while TeamCity was showing a startup error. The page
                   # says which it is; ask it rather than assume the benign one.
-                  local why stage
-                  why=$(stack::maintenance_reason); stage=$(stack::maintenance_stage)
-                  if [[ $stage == EXCEPTION ]]; then
-                      verify::_fail 'server answers HTTP' "503, ${why:-server startup error}"
+                  if stack::server_failed; then
+                      verify::_fail 'server answers HTTP' "503, $(stack::not_ready_reason)"
                       verify::_why 'Read the cause with: ./tc logs server'
                   else
-                      verify::_pass 'server answers HTTP' "503, ${why:-awaiting first-run setup}"
+                      verify::_pass 'server answers HTTP' "503, $(stack::not_ready_reason)"
                   fi ;;
         starting) verify::_fail 'server answers HTTP' 'no response' ;;
     esac
@@ -260,8 +258,8 @@ verify::_rest() {
     ui::blank; ui::info 'REST and agents'
 
     if [[ $(stack::server_state) == setup ]]; then
-        verify::_skip 'REST API reachable' 'first-run setup not finished'
-        verify::_why "Run ./tc token, then complete setup at $(conf::url)"
+        verify::_skip 'REST API reachable' "$(stack::not_ready_reason)"
+        verify::_why "Run ./tc token, then complete that step at $(conf::url)"
         verify::_skip 'agents authorized' 'needs an administrator account'
         return
     fi
@@ -345,7 +343,7 @@ verify::_backup() {
     ui::blank; ui::info 'Backup'
 
     if [[ $(stack::server_state) != ready ]]; then
-        verify::_skip 'native backup round-trip' 'server not past first-run setup'
+        verify::_skip 'native backup round-trip' "server not ready: $(stack::not_ready_reason)"
         return
     fi
     if ! agents::_rest GET /app/rest/server >/dev/null 2>&1; then

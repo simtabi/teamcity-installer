@@ -280,3 +280,27 @@ _archive() {   # _archive <name> <stack>
     run backup::_archives_oldest_first
     [ "${#lines[@]}" -eq 2 ] || { echo 'an archive vanished from the list'; return 1; }
 }
+
+# --- one owner per fact --------------------------------------------------------
+#
+# These are guards against a repeat, not against a specific bug. The same defect
+# was fixed three times in three modules because each module had re-derived a
+# fact it should have asked for. A grep-shaped test is crude, but it fails when
+# someone reintroduces the duplication, which is the only property that matters
+# here.
+
+@test "archive ordering has exactly one implementation" {
+    # Every other listing must go through it, or half of them sort by kind.
+    run grep -n 'find "\$BACKUP_DIR".*teamcity-\*' "$LIB/backup.sh"
+    local offenders=0 line
+    while IFS= read -r line; do
+        [[ $line == *'_archives_oldest_first'* ]] && continue
+        [[ $line == *'sort'* ]] && { echo "sorts archives itself: $line"; offenders=$((offenders+1)); }
+    done <<< "$output"
+    [ "$offenders" -eq 0 ]
+}
+
+@test "the restore chooser and the listing share that ordering" {
+    run grep -c '_archives_oldest_first' "$LIB/backup.sh"
+    [ "$output" -ge 3 ]     # the definition, prune, list, restore
+}

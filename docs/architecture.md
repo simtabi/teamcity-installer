@@ -152,6 +152,75 @@ One-shot commands deliberately do **not** arm that trap. `./tc status` returning
 from a trap, so the distinction is drawn by mode. Commands print their own errors and propagate
 their exit code.
 
+## Why one place owns each fact about the server
+
+The same defect was fixed three times, in three modules, before anyone asked what they had in
+common. It is worth writing down, because the shape recurs in any tool that wraps a system with a
+richer state model than its own.
+
+**The symptom.** An upgrade told a user to confirm a data directory upgrade while TeamCity was
+showing the licence agreement. `./tc verify` reported a server that had failed to start as a pass,
+"awaiting first-run setup". A stack restored from a backup — licence accepted weeks earlier,
+administrator already present — was told to accept a licence and create an administrator, and handed
+a super user token to do it with. Three bugs, three modules, three fixes, all correct, none of which
+stopped the next one.
+
+**The cause.** `stack::server_state` returns one of three values — `ready`, `setup`, `starting` — for
+a domain with at least six distinguishable conditions:
+
+| TeamCity is | It answers | The enum says |
+|---|---|---|
+| still starting its components | 503 + maintenance page | `setup` (before the fix) |
+| waiting for the licence agreement | 503 + maintenance page | `setup` |
+| waiting for a data directory upgrade | 503 + maintenance page | `setup` |
+| waiting for database configuration | 503 + maintenance page | `setup` |
+| broken — it threw during startup | 503 + maintenance page | `setup` |
+| running, but with no user accounts | 200 | `ready` |
+
+Every caller needing more than three values re-derived the difference from context it did not have,
+and each re-derivation was an independent guess. Six of them had separately settled on "awaiting
+first-run setup" — correct for one of the six rows, wrong for four.
+
+Fixing a caller removes one symptom and leaves the cause, so the next caller reproduces it. That is
+the loop, and it is not a matter of insufficient care: the information genuinely was not available
+at the call site, so a conscientious author writing the seventh caller would guess too.
+
+**Why the tests did not catch it.** They asserted the same assumption the code made. Every test stubbed
+`stack::server_state` to return the literal `setup` and then checked the caller behaved as though
+that meant a first run. A stub of a signal cannot falsify the signal's meaning — it can only confirm
+that the caller reads it consistently, which was never in doubt. The bug also lives in a transient:
+the boot window. The pure suite has no server to be transient, and the live checks sample steady
+states, so neither could enter it.
+
+**The fix.** The information was there all along. TeamCity publishes its stage, unauthenticated, in
+an HTML comment on the maintenance page:
+
+```html
+<!--
+Page: maintenance-welcome
+Stage: LICENSE_AGREEMENT_SCREEN
+[Stage description: Review and accept TeamCity license agreement to continue using the product]
+```
+
+So there is now exactly one answer to "what is it waiting for" — `stack::not_ready_reason` — and one
+answer to "did it fail" — `stack::server_failed`. Both come from TeamCity. Callers phrase a sentence
+around the answer; they do not compute it. `APPLICATION_STARTING` is no longer `setup` at all, which
+is what made a booting server look like one waiting for input.
+
+**The general rule this repository follows.** *A fact about the outside world is derived in one place
+and read everywhere else.* Where the same reasoning appears twice, one of them is eventually wrong,
+and the second author will not know the first existed. Two structural tests hold the line: no module
+outside `stack.sh` may state what a not-ready server wants, and no code outside
+`backup::_archives_oldest_first` may order archives. Both were checked by reintroducing the original
+bugs and confirming they go red.
+
+The archive ordering is the same shape in miniature. `find | sort` reads as oldest-first and is not:
+names begin with the kind, so every `teamcity-cold-…` sorts ahead of every `teamcity-logical-…`
+whatever the dates are. Retention walked that order deleting from the front, and would have removed
+the newest backup on the machine while reporting it as the oldest. The listing and the restore
+chooser had their own copies of the same `sort`, presenting an older archive above a newer one in a
+menu chosen from by position.
+
 ## Why bash, and how it is kept honest
 
 The console is ~2,400 lines of bash. That is past the size where bash is obviously the right
