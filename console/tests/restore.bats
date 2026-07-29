@@ -221,3 +221,62 @@ _archive() {   # _archive <name> <stack>
     [ ! -d "$BACKUP_DIR/teamcity-cold-1" ]
     [ -d "$BACKUP_DIR/teamcity-cold-2" ]
 }
+
+# --- retention order -----------------------------------------------------------
+#
+# `find | sort` sorts paths as strings, and every archive name begins with its
+# kind, so every "teamcity-cold-…" preceded every "teamcity-logical-…" whatever
+# the dates were. Retention deleted from the front of that list calling each one
+# the oldest — which, with a cold backup taken minutes ago and a logical one from
+# the morning, meant deleting the newest archive on the machine.
+
+@test "archives come back in age order, not kind order" {
+    _archive teamcity-logical-20260728-101354 teamcity
+    _archive teamcity-native-20260728-101609  teamcity
+    _archive teamcity-cold-20260728-230243    teamcity
+    _archive teamcity-logical-20260728-230515 teamcity
+
+    run backup::_archives_oldest_first
+    [ "${lines[0]##*/}" = 'teamcity-logical-20260728-101354' ]
+    [ "${lines[1]##*/}" = 'teamcity-native-20260728-101609' ]
+    [ "${lines[2]##*/}" = 'teamcity-cold-20260728-230243' ]
+    [ "${lines[3]##*/}" = 'teamcity-logical-20260728-230515' ]
+}
+
+@test "retention deletes the genuinely oldest, across kinds" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=2
+    _archive teamcity-logical-20260728-101354 teamcity   # oldest
+    _archive teamcity-native-20260728-101609  teamcity   # next
+    _archive teamcity-cold-20260728-230243    teamcity   # newest but sorts first by name
+    _archive teamcity-logical-20260728-230515 teamcity   # newest
+
+    run backup::prune
+    [ ! -d "$BACKUP_DIR/teamcity-logical-20260728-101354" ]
+    [ ! -d "$BACKUP_DIR/teamcity-native-20260728-101609" ]
+    [ -d "$BACKUP_DIR/teamcity-cold-20260728-230243" ]    || { echo 'deleted the newest cold archive'; return 1; }
+    [ -d "$BACKUP_DIR/teamcity-logical-20260728-230515" ] || { echo 'deleted the newest logical archive'; return 1; }
+}
+
+@test "a kind sorting first alphabetically is not treated as oldest" {
+    TC_STACK=teamcity TC_BACKUP_KEEP=1
+    _archive teamcity-cold-20260729-090000    teamcity   # newest, but "cold" < "logical"
+    _archive teamcity-logical-20260701-090000 teamcity   # a month older
+
+    run backup::prune
+    [ -d "$BACKUP_DIR/teamcity-cold-20260729-090000" ] || { echo 'deleted the newer archive'; return 1; }
+    [ ! -d "$BACKUP_DIR/teamcity-logical-20260701-090000" ]
+}
+
+@test "dates order before times within the same day" {
+    _archive teamcity-cold-20260728-235959 teamcity
+    _archive teamcity-cold-20260729-000001 teamcity
+    run backup::_archives_oldest_first
+    [ "${lines[0]##*/}" = 'teamcity-cold-20260728-235959' ]
+}
+
+@test "an oddly named directory is still ordered deterministically, not dropped" {
+    _archive teamcity-cold-20260728-101010 teamcity
+    _archive teamcity-strange              teamcity
+    run backup::_archives_oldest_first
+    [ "${#lines[@]}" -eq 2 ] || { echo 'an archive vanished from the list'; return 1; }
+}

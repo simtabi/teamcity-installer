@@ -3,6 +3,17 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-07-29
+
+### Fixed
+
+- **Retention deleted the newest archive, not the oldest.** `find | sort` orders paths as strings
+  and every archive name begins with its kind, so every `teamcity-cold-…` sorted ahead of every
+  `teamcity-logical-…` whatever the dates were. Walking that list from the front and calling each
+  one the oldest meant a limit of two, applied to four archives, would have removed a cold snapshot
+  taken minutes earlier and kept a logical one from the morning. Chronology only ever held within a
+  single kind. Ordering is now taken from the timestamp the name already carries.
+
 ## [0.3.0] — 2026-07-29
 
 Four paths that were documented but had never been executed — both agent Docker modes, the upgrade,
@@ -181,6 +192,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.3.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.1
 [0.3.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.0
 [0.2.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.2.0
 [0.1.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.1.0

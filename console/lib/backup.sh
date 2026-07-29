@@ -65,13 +65,37 @@ backup::_archive_stack() {
     jq -r '.stack // ""' "$1/manifest.json" 2>/dev/null
 }
 
+# Archives, genuinely oldest first.
+#
+# `find | sort` looks like it does this and does not: the paths sort as strings
+# and every name begins with its kind, so "teamcity-cold-…" precedes every
+# "teamcity-logical-…" whatever the dates are. Retention walks that order
+# deleting from the front, announcing each one as the oldest — so with four
+# archives and a limit of two it would have deleted the *newest* backup on the
+# machine, a cold snapshot taken minutes earlier, and kept an older logical one.
+# Chronology only ever held within a single kind.
+#
+# Sorting on the timestamp the name already carries fixes it without needing to
+# read every manifest. `${name#teamcity-*-}` drops the kind and leaves
+# "20260728-230243", which sorts correctly as a plain string.
+backup::_archives_oldest_first() {
+    local path name
+    while IFS= read -r path; do
+        [[ -n $path ]] || continue
+        name=${path##*/}
+        printf '%s\t%s\n' "${name#teamcity-*-}" "$path"
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' 2>/dev/null) \
+        | LC_ALL=C sort \
+        | cut -f2-
+}
+
 backup::prune() {
     local keep=${TC_BACKUP_KEEP:-5}
     [[ $keep =~ ^[0-9]+$ ]] || return 0
     (( keep > 0 )) || return 0
 
     local -a all archives=() foreign=()
-    mapfile -t all < <(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -name 'teamcity-*' | sort)
+    mapfile -t all < <(backup::_archives_oldest_first)
 
     local d owner
     for d in "${all[@]}"; do
