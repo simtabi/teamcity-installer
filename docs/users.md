@@ -46,7 +46,7 @@ would go stale the moment you changed it in the UI. Set `TC_ADMIN_USER` and `TC_
 ### If you lose it
 
 ```sh
-./tc admin reset            # or: ./tc admin reset <username>
+./tc users passwd admin     # or any username; ./tc admin reset still works
 ```
 
 Shown-once means exactly that: miss the line and you are locked out of an account that exists and
@@ -156,6 +156,10 @@ deliberately outside `stack/.env` so it cannot leak through `docker compose conf
 
 With agent auto-authorization enabled — the default — you may never need one. See
 [agents](tools/agents.md).
+
+
+See [users](tools/users.md) for the command reference — listing accounts, showing one
+in detail, and how a password is chosen and verified.
 
 ---
 

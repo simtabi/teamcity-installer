@@ -161,7 +161,8 @@ setup() {
 @test "admin reset is reachable from the command line" {
     grep -qE 'admin\).*reset' "$LIB/main.sh" \
         || { echo 'the reset path is not dispatched'; return 1; }
-    grep -q 'admin::reset_password' "$LIB/main.sh"
+    # Routed to the single implementation in users.sh rather than a second copy.
+    grep -q 'users::passwd' "$LIB/main.sh"
 }
 
 @test "the help text mentions the recovery, or nobody will find it" {
@@ -172,7 +173,7 @@ setup() {
 @test "the reset proves the new credential rather than trusting the response" {
     # A 200 on the PUT means the request was accepted, not that anyone can sign
     # in with the result — and being unable to sign in is the entire problem.
-    run grep -A4 'agents::_rest_as' "$LIB/admin.sh"
+    run grep -A4 '^users::_verify()' "$LIB/users.sh"
     [[ $output == *'_rest_as'* ]]
 }
 
@@ -185,6 +186,6 @@ setup() {
 }
 
 @test "reset refuses on a server that is not ready, and says why" {
-    run grep -A8 '^admin::reset_password()' "$LIB/admin.sh"
+    run grep -A12 '^users::passwd()' "$LIB/users.sh"
     [[ $output == *'not_ready_reason'* ]]
 }

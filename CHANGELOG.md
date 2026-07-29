@@ -3,6 +3,33 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-07-29
+
+### Added
+
+- **`./tc users`** — every account with its id, name, email, whether it holds `SYSTEM_ADMIN` at
+  global scope, and when it last signed in. The fields are requested explicitly: TeamCity's default
+  user response carries no email, no roles and no last login, so a table built from it would show
+  three empty columns and read as missing data. A server where *no* account can administer anything
+  is called out, since the UI offers no way to fix that from inside.
+- **`./tc users show <username>`** — one account in detail, with its roles and groups.
+- **`./tc users passwd <username>`** — set a password for any account, not just the bootstrap
+  administrator. Works when nobody knows any password, because it authenticates with the super user
+  token that TeamCity writes to its log on every start.
+- A **Users** menu entry, and `make users`, `make user-show`, `make user-passwd`.
+
+### Changed
+
+- **Passwords are read from standard input**, not an environment variable:
+  `printf 'secret' | ./tc users passwd alice`. The launcher passes a fixed set of variables into the
+  container, so a `TC_NEW_PASSWORD` on the host never arrived — the scripted path looked supported
+  and silently generated a password instead. A pipe also keeps the secret out of `docker inspect`.
+- **One implementation sets passwords.** `admin::reset_password`, added hours earlier, was removed
+  in favour of `users::passwd`; `./tc admin reset` routes to it. Two implementations of the same
+  operation is how this console previously ended up with one defect in three places.
+- **`./tc admin` now says how to recover** at the moment it prints a generated password, rather than
+  leaving that in a document read only after someone is already locked out.
+
 ## [0.5.0] — 2026-07-29
 
 ### Added
@@ -257,6 +284,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.6.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.6.0
 [0.5.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.5.0
 [0.4.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.1
 [0.4.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.0

@@ -38,6 +38,8 @@ source "$LIB_DIR/doctor.sh"
 source "$LIB_DIR/admin.sh"
 # shellcheck source=verify.sh
 source "$LIB_DIR/verify.sh"
+# shellcheck source=users.sh
+source "$LIB_DIR/users.sh"
 
 # --- error handling -----------------------------------------------------------
 #
@@ -153,6 +155,7 @@ TC_MENU=(
     'Doctor|diagnostics and health probes|main::doctor_menu'
     'Token|super user token for first-run setup|stack::token'
     'Admin|create the first administrator account|admin::bootstrap'
+    'Users|list accounts and set passwords|users::menu'
     'Open|show the TeamCity URL|stack::open_url'
     'Shell|open a shell in a container|stack::shell'
     'Reconfigure|change settings, keep data|wizard::run'
@@ -266,6 +269,9 @@ TeamCity control console
   ./tc token               super user token for TeamCity's first-run setup
   ./tc admin               create the first administrator account
   ./tc admin reset [user]  reset an administrator password you have lost
+  ./tc users               list every account, and who can administer
+  ./tc users show <user>   one account in detail: roles, groups, last sign-in
+  ./tc users passwd <user> set a password — works when nobody knows one
   ./tc shell [service]     open a shell in a running container
   ./tc open                print the TeamCity URL
   ./tc reconfigure         change settings, keeping all data
@@ -365,8 +371,14 @@ main::run_command() {
         upgrade)   upgrade::run ;;
         doctor)    doctor::run ;;
         token)     stack::token ;;
-        admin)     if [[ ${1:-} == reset ]]; then admin::reset_password "${2:-}"
+        admin)     if [[ ${1:-} == reset ]]; then users::passwd "${2:-}"
                    else admin::bootstrap; fi ;;
+        users)     case ${1:-list} in
+                       list)   users::list ;;
+                       show)   users::show "${2:-}" ;;
+                       passwd) users::passwd "${2:-}" ;;
+                       *) ui::err "Unknown users action '${1}'. Use list, show or passwd."; return 2 ;;
+                   esac ;;
         shell)     stack::shell "${1:-}" ;;
         open)      stack::open_url ;;
         reconfigure) wizard::run ;;
