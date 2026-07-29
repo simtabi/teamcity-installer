@@ -38,6 +38,7 @@ verify::run() {
     verify::_database
     verify::_rest
     verify::_backup
+    verify::_build
 
     ui::blank
     local total=$(( VERIFY_PASS + VERIFY_FAIL + VERIFY_SKIP ))
@@ -401,4 +402,41 @@ verify::_backup() {
     fi
 
     rm -rf "$made"      # leave no clutter behind
+}
+
+# --- can it actually build? -----------------------------------------------------
+#
+# Every other check here is a precondition. This is the only one that asks the
+# question the server exists to answer, and it is gated behind --deep because it
+# queues real work on a real agent — seconds on an idle stack, a wait behind
+# someone else's build on a busy one.
+#
+# It also gives --deep something to be. Before this, the flag only lifted the
+# time budget on the backup check: "deep" that added no coverage.
+verify::_build() {
+    ui::scope verify
+    [[ ${VERIFY_DEEP:-0} == 1 ]] || return 0
+
+    ui::blank; ui::info 'Build'
+
+    if [[ $(stack::server_state) != ready ]]; then
+        verify::_skip 'a build runs end to end' "server not ready: $(stack::not_ready_reason)"
+        return
+    fi
+
+    local available
+    available=$(agents::_rest GET '/app/rest/agents?locator=authorized:true,connected:true' 2>/dev/null \
+        | jq -r '.count // 0')
+    if [[ ${available:-0} == 0 ]]; then
+        verify::_skip 'a build runs end to end' 'no connected, authorized agent'
+        verify::_why 'Check ./tc agents — a build would queue forever.'
+        return
+    fi
+
+    if smoke::run >/dev/null 2>&1; then
+        verify::_pass 'a build runs end to end' 'step executed, output confirmed in the log'
+    else
+        verify::_fail 'a build runs end to end' 'the smoke build did not succeed'
+        verify::_why 'Run ./tc smoke to see where it stopped.'
+    fi
 }

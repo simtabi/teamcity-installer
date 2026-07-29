@@ -67,6 +67,7 @@ account for you, since a started server with no accounts is one nobody can sign 
 - [Stack](docs/tools/stack.md) — the generated compose file, services and volumes
 - [Agents](docs/tools/agents.md) — scaling, authorizing and pruning build agents
 - [Users](docs/tools/users.md) — listing accounts and setting a password when nobody knows one
+- [Smoke build](docs/tools/smoke.md) — proving the stack can build, not just that it looks healthy
 - [Backup](docs/tools/backup.md) — the three backup tiers and restore compatibility rules
 - [Upgrade](docs/tools/upgrade.md) — version changes, guards and the maintenance token
 - [Doctor](docs/tools/doctor.md) — diagnostics and the exported bundle

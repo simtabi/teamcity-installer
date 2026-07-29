@@ -93,13 +93,16 @@ CLI cannot ask for is one nothing can script, and that gap has appeared here mor
 | `./tc journal [tool] [follow]` | `make journal TOOL=stack` | this console's own logs — see [logging](logging.md) |
 | `./tc doctor` | `make doctor` | diagnostics and health probes |
 | `./tc verify` | `make verify` | live end-to-end checks |
-| `./tc verify --deep` | `make verify-deep` | the same checks, with no time limit on the backup one |
+| `./tc verify --deep` | `make verify-deep` | the same checks, plus a real build end to end |
+| `./tc smoke` | `make smoke` | run a throwaway build and prove its step executed |
 | `./tc preflight` | `make preflight` | is this machine ready — runs before a stack exists |
 | `./tc open` | `make open` | print the URL; a container cannot open your browser |
 | `./tc shell [service]` | `make shell SERVICE=db` | shell inside a running container |
 
-`./tc verify --deep` adds no checks. It removes the time budget on the native backup round-trip, for
-a data directory large enough that the default would skip it.
+`./tc verify --deep` removes the time budget on the native backup round-trip, and adds the one check
+that asks what the server exists to answer: it runs a build. Everything else verify does is a
+precondition — containers healthy, volumes mapped, agents authorized — and none of it is evidence
+that a build will actually run. See [smoke](smoke.md).
 
 ### Accounts
 

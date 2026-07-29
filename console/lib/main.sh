@@ -40,6 +40,8 @@ source "$LIB_DIR/admin.sh"
 source "$LIB_DIR/verify.sh"
 # shellcheck source=users.sh
 source "$LIB_DIR/users.sh"
+# shellcheck source=smoke.sh
+source "$LIB_DIR/smoke.sh"
 
 # --- error handling -----------------------------------------------------------
 #
@@ -152,6 +154,7 @@ TC_MENU=(
     'Backup|back up, restore, list archives|backup::menu'
     'Upgrade|move to another TeamCity version|upgrade::run'
     'Verify|live end-to-end checks against this stack|verify::run'
+    'Smoke build|run a throwaway build and prove its step executed|smoke::run'
     'Doctor|diagnostics and health probes|main::doctor_menu'
     'Token|super user token for first-run setup|stack::token'
     'Admin|create the first administrator account|admin::bootstrap'
@@ -282,6 +285,7 @@ TeamCity control console
   ./tc lint                shellcheck the console scripts
   ./tc test                run the bats suite (no daemon or network needed)
   ./tc verify [--deep]     live end-to-end checks against the running stack
+  ./tc smoke               run a throwaway build, and prove its step executed
   ./tc --help              this text
 
 Two different tokens are involved, for two different jobs:
@@ -389,6 +393,7 @@ main::run_command() {
         lint)      main::lint ;;
         test)      main::test ;;
         verify)    [[ ${1:-} == --deep ]] && VERIFY_DEEP=1; verify::run ;;
+        smoke)     smoke::run ;;
         help|--help|-h) main::usage ;;
         *)         ui::err "Unknown command '$cmd'."; main::usage; return 2 ;;
     esac

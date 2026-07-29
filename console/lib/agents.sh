@@ -80,6 +80,19 @@ agents::_rest() {
     curl "${args[@]}" "$(agents::_rest_base)$path"
 }
 
+# A plain authenticated GET against a non-REST path.
+#
+# The build log lives at /downloadBuildLog.html, outside /app/rest, and comes
+# back as text rather than JSON — so it needs the console's credentials but none
+# of the REST wrapper's Accept negotiation.
+agents::_rest_raw() {
+    local -a auth=()
+    mapfile -t auth < <(agents::_auth_args) || return 2
+    (( ${#auth[@]} > 0 )) || return 2
+    curl --silent --show-error --fail --max-time "${TC_REST_TIMEOUT:-30}" \
+        "${auth[@]}" "$(agents::_rest_base)$1"
+}
+
 # The same call, as a named user rather than as whoever the console can be.
 #
 # Used to prove a password works. Every other REST call here deliberately falls

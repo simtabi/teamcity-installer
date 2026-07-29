@@ -14,7 +14,7 @@ TC    := ./tc
 .PHONY: help perms up down start stop restart status logs journal token admin \
         shell open doctor verify verify-deep preflight install reconfigure \
         agents authorize backup restore prune upgrade reset lint test check \
-        users user-show user-passwd \
+        users user-show user-passwd smoke \
         drift clean
 
 ## help: list the targets
@@ -112,6 +112,10 @@ doctor: perms
 ## verify: live end-to-end checks against the running stack
 verify: perms
 	@$(TC) verify
+
+## smoke: run a throwaway build and prove its step executed
+smoke: perms
+	@$(TC) smoke
 
 ## verify-deep: verify, with no time limit on the backup check
 verify-deep: perms
