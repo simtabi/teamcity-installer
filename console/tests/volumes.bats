@@ -125,3 +125,49 @@ setup() { load_libs; default_conf; }
     [[ $dind   != *'docker.sock:/var/run/docker.sock'* ]] || { echo 'dind should not mount the host socket'; return 1; }
     [[ $socket != *'DOCKER_IN_DOCKER'* ]]                 || { echo 'socket mode should not start an inner daemon'; return 1; }
 }
+
+# --- the bundled database ------------------------------------------------------
+#
+# TC_DB='hsqldb' is offered by the wizard, documented as a supported setting, and
+# had never once been booted. It could not be: datadir-init mounted the JDBC
+# driver cache unconditionally while the volumes block declared it only for
+# PostgreSQL, so compose refused the file outright —
+#
+#   service "datadir-init" refers to undefined volume jdbc-cache
+#
+# Not a subtle failure. Nothing had ever generated the file to find out.
+
+@test "the bundled database renders a compose file that parses" {
+    TC_DB=hsqldb
+    local out; out=$(render::_datadir_init)
+    [[ $out != *'jdbc-cache'* ]] || { echo 'mounts a volume that is never declared'; return 1; }
+}
+
+@test "PostgreSQL still gets the driver cache" {
+    TC_DB=postgres
+    local out; out=$(render::_datadir_init)
+    [[ $out == *'jdbc-cache:/cache'* ]] || { echo 'the driver would be re-downloaded every time'; return 1; }
+}
+
+@test "every volume datadir-init mounts is declared" {
+    # The general form of the bug, checked for both databases rather than just
+    # the one that happened to be in use.
+    local db mount
+    for db in postgres hsqldb; do
+        TC_DB=$db
+        local declared; declared=$(render::volume_names)
+        while IFS= read -r mount; do
+            [[ $mount == ./* ]] && continue          # a bind mount, not a named volume
+            grep -qx "${TC_STACK}_${mount}" <<< "$declared" \
+                || { echo "$db: datadir-init mounts '$mount', which is not declared"; return 1; }
+        done < <(render::_datadir_init | sed -n 's/^      - \([^:]*\):.*/\1/p')
+    done
+}
+
+@test "the bundled database renders no db service and no pgdata" {
+    TC_DB=hsqldb
+    local out; out=$(render::compose_body 2>/dev/null || render::_datadir_init)
+    run render::volume_names
+    [[ $output != *pgdata* ]]     || { echo 'a PostgreSQL volume on a bundled-database stack'; return 1; }
+    [[ $output != *jdbc-cache* ]] || { echo 'a driver cache with no driver to cache'; return 1; }
+}

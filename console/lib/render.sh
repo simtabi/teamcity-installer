@@ -151,6 +151,18 @@ EOF
 }
 
 render::_datadir_init() {
+    # The driver cache is PostgreSQL's, and the volumes block only declares it for
+    # PostgreSQL — so mounting it unconditionally produced a compose file that
+    # would not parse at all under TC_DB='hsqldb':
+    #
+    #   service "datadir-init" refers to undefined volume jdbc-cache
+    #
+    # A supported setting, offered by the wizard, that had never once been booted.
+    # The init container itself is still needed: it creates the data directory and
+    # hands it to uid 1000, which matters whichever database is in use.
+    local jdbc_cache=''
+    [[ $TC_DB == postgres ]] && jdbc_cache=$'\n      - jdbc-cache:/cache'
+
     cat <<EOF
   datadir-init:
     image: alpine:3.22
@@ -168,8 +180,7 @@ render::_datadir_init() {
       TC_PG_PASSWORD: \${TC_PG_PASSWORD}
       TC_JDBC_VERSION: \${TC_JDBC_VERSION}
     volumes:
-      - datadir:/data/teamcity_server/datadir
-      - jdbc-cache:/cache
+      - datadir:/data/teamcity_server/datadir$jdbc_cache
       - ./init:/init:ro
     entrypoint: ['/bin/sh', '/init/seed-datadir.sh']
     restart: 'no'

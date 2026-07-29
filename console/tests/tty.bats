@@ -184,3 +184,49 @@ on_a_tty() {
     grace=$(grep -oE 'setup_grace=[0-9]+' "$LIB/stack.sh" | head -1 | cut -d= -f2)
     [ "${grace:-0}" -ge 60 ] || { echo "grace is only ${grace}s"; return 1; }
 }
+
+# --- the chooser's contract, without needing to type at it ---------------------
+#
+# Driving gum with real keystrokes is not possible from this test environment:
+# `script` here does not forward piped stdin into the pseudo-terminal, so gum
+# blocks in raw mode until it is killed. Rather than ship tests that cannot run,
+# these check the property the keystrokes would have been checking — that what
+# the chooser hands back is the bare label, not the padded string it displayed.
+#
+# That is the real historical risk. An earlier ui::menu built a space-padded
+# display string, passed it to gum, and matched the answer back by exact string:
+# any trimming by gum would have selected nothing at all, silently.
+
+@test "a selection comes back as the bare label, not the padded display line" {
+    # shellcheck disable=SC1090
+    source "$LIB/ui.sh"
+    # Stand in for gum, returning what it would print: the padded display line.
+    gum() { printf '%s\n' 'Smoke build    run a throwaway build and prove its step executed'; }
+    ui::interactive() { return 0; }
+
+    run ui::menu 'Pick' 'Start|bring the stack up' 'Smoke build|run a throwaway build and prove its step executed'
+    [ "$output" = 'Smoke build' ] || { echo "menu returned '$output'"; return 1; }
+}
+
+@test "a label is still matched when the chooser trims its padding" {
+    # gum is free to strip trailing space. Matching by exact string would then
+    # find nothing and the menu would silently do nothing.
+    # shellcheck disable=SC1090
+    source "$LIB/ui.sh"
+    gum() { printf '%s\n' 'Smoke build run a throwaway build and prove its step executed   '; }
+    ui::interactive() { return 0; }
+
+    run ui::menu 'Pick' 'Start|x' 'Smoke build|run a throwaway build and prove its step executed'
+    [ "$output" = 'Smoke build' ] || { echo "menu returned '$output'"; return 1; }
+}
+
+@test "an abandoned chooser selects nothing rather than the first entry" {
+    # shellcheck disable=SC1090
+    source "$LIB/ui.sh"
+    gum() { return 130; }            # what gum returns on Ctrl-C
+    ui::interactive() { return 0; }
+
+    run ui::menu 'Pick' 'Start|x' 'Quit|'
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}

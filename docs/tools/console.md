@@ -46,6 +46,15 @@ Running `./tc` with no arguments opens the menu. Before a stack exists it offers
 
 A failure inside any action reports the file, line and command, then returns to the menu.
 
+> **What is and is not covered by tests.** `tty.bats` allocates a real pseudo-terminal, so the
+> styled branch — the one that shipped the worst bug in this project's history — is exercised rather
+> than assumed. What is *not* automated is typing at the chooser: `script(1)` in the console image
+> does not forward piped stdin into the pseudo-terminal, so gum blocks in raw mode until killed.
+> Instead the tests check the property those keystrokes would have checked — that a selection comes
+> back as the bare label rather than the padded line that was displayed, including when gum trims
+> whitespace, and that abandoning the chooser selects nothing rather than the first entry. Walking
+> the menu by hand remains the one thing only a person can do.
+
 **Every action ends visibly.** When one finishes, a bordered prompt names it and waits for enter:
 
 ```
@@ -209,7 +218,7 @@ Two unrelated tokens are involved, and confusing them is the usual way to get st
 `lint` and `test` need no daemon, no stack and no network. `verify` exercises the running stack —
 see [verify](verify.md).
 
-225 tests, and the suite is **pure**: `docker` and the network are stubbed, so it needs no daemon,
+247 tests, and the suite is **pure**: `docker` and the network are stubbed, so it needs no daemon,
 no stack and no internet. It runs anywhere the console image runs and is fast enough to gate a
 commit.
 
@@ -231,6 +240,7 @@ What it covers is deliberately narrow — the logic where a mistake is silent ra
 | `users.bats` | setting a password never needs one, and never claims success it has not checked |
 | `backup.bats` | the disk guard refuses before anything is stopped, at the exact boundary |
 | `secrets.bats` | no credential reaches a tracked file, a log or a diagnostics bundle |
+| `smoke.bats` | a green build with no step output is a failure, not a pass |
 
 Each file names the bug that motivated it. `volumes.bats` exists because a shipped version mapped
 `/var/lib/docker` only under Docker-in-Docker, leaking three anonymous volumes on a default stack;
