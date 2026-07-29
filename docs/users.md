@@ -18,6 +18,36 @@ It is worth being precise, because the two are easy to conflate:
 The token does not create anything by itself. It gets you *past the gate* so you can create the
 first real account.
 
+### Which one do you need right now?
+
+| You want to | Use |
+|---|---|
+| sign in normally, day to day | the **administrator account** |
+| accept the licence on a brand-new server | the **super user token** |
+| confirm a data directory upgrade | the **super user token** |
+| get in when nobody knows a password | the **super user token**, or `./tc users passwd` |
+
+### Lifetimes, which is where people come unstuck
+
+The **account password survives everything the console does to the stack**: `./tc down`, `./tc up`,
+`./tc restart`, an upgrade, a rebuilt console image. It lives in TeamCity's database, inside a named
+volume, and only `./tc reset` or a restore replaces it. Write it down once and it keeps working.
+
+The **super user token does not survive a restart.** TeamCity issues a new one every time the server
+starts, so a token copied yesterday — or ten minutes ago, on the other side of a `./tc restart` — is
+rejected, and the message you get says the token is wrong rather than that it is stale. Always take
+it fresh:
+
+```sh
+./tc token
+```
+
+That difference is the usual reason someone believes they are locked out when they are not.
+
+> Neither belongs in a commit. `stack/.env`, `stack/.secrets` and `logs/` are gitignored, log output
+> is redacted, and a test greps every tracked file for known credentials on each run — but a
+> password pasted into a README or an issue is outside all of that.
+
 ## Creating the first administrator
 
 The console does this for you. When the server comes up with no accounts, `./tc up` creates one; you

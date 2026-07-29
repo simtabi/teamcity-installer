@@ -3,6 +3,29 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-07-29
+
+### Changed
+
+- **The console reference documents every command.** Five commands (`users`, and the `start`/`stop`
+  aliases) and every subcommand — `backup native|logical|cold|list`, `users show|passwd`,
+  `admin reset`, `verify --deep` — were missing, along with eight `make` targets. Each command now
+  appears with its `make` equivalent and what it actually does, grouped by what you are trying to
+  do rather than by module.
+- **Credential lifetimes are spelled out.** The administrator password survives `down`, `up`,
+  `restart`, upgrades and rebuilds — it lives in the database inside a named volume. The super user
+  token does not survive a single restart, and a stale one is rejected with a message that says the
+  token is wrong rather than that it is old. Confusing the two is the usual reason someone believes
+  they are locked out.
+- Exit codes are documented, with the warning that measuring them through a pipe measures the pipe.
+
+### Added
+
+- **Tests that fail when documentation drifts.** Every dispatched command, every subcommand and
+  every `make` target must appear in the reference, and a claimed test count must be within range of
+  the real one — it said 89 while the suite passed 200. Verified by removing entries and confirming
+  the suite goes red.
+
 ## [0.6.0] — 2026-07-29
 
 ### Added
@@ -284,6 +307,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.6.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.6.1
 [0.6.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.6.0
 [0.5.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.5.0
 [0.4.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.1

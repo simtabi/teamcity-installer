@@ -30,6 +30,7 @@ Running `./tc` with no arguments opens the menu. Before a stack exists it offers
 | Restart | re-render and force-recreate |
 | Status | service table with state, health, restarts and ports |
 | Logs | follow one service or all; Ctrl-C returns to the menu |
+| Journal | this console's own logs, one file per tool — see [logging](logging.md) |
 | Agents | scale, list, authorize, prune — see [agents](agents.md) |
 | Backup | back up, restore, list — see [backup](backup.md) |
 | Upgrade | change TeamCity version — see [upgrade](upgrade.md) |
@@ -37,6 +38,7 @@ Running `./tc` with no arguments opens the menu. Before a stack exists it offers
 | Verify | live end-to-end checks — see [verify](verify.md) |
 | Token | print the super user token for TeamCity's first-run setup |
 | Admin | create the first administrator account |
+| Users | list accounts and set passwords — see [users](users.md) |
 | Open | print the URL (the console is a container and cannot open a browser) |
 | Shell | `exec` a shell in a running container |
 | Reconfigure | re-run the wizard with current values prefilled |
@@ -66,48 +68,105 @@ is on a fifteen-second cadence:
 
 ## Commands
 
-Every menu action has a non-interactive equivalent:
+Every capability is reachable three ways — command line, menu and `make` — because a capability the
+CLI cannot ask for is one nothing can script, and that gap has appeared here more than once.
 
-```sh
-# lifecycle
-./tc install             # guided setup
-./tc reconfigure         # change settings, keeping all data
-./tc up                  # start          (make up / make start)
-./tc down                # stop, data kept
-./tc restart
-./tc reset               # destroy the stack and all its data
+### Lifecycle
 
-# looking at it
-./tc status              # non-zero exit when not fully running
-./tc logs [service]      # container logs
-./tc journal [tool]      # this console's own logs
-./tc doctor              # diagnostics
-./tc verify [--deep]     # live end-to-end checks
-./tc preflight           # is this machine ready
-./tc open                # print the URL
-./tc shell [service]     # shell in a running container
+| Command | `make` | Does |
+|---|---|---|
+| `./tc install` | `make install` | guided setup; writes `stack/.env` |
+| `./tc reconfigure` | `make reconfigure` | re-run the wizard with current values, keeping all data |
+| `./tc up` (`start`) | `make up` / `make start` | render, `up -d`, wait for HTTP, authorize agents |
+| `./tc down` (`stop`) | `make down` / `make stop` | stop containers; volumes untouched |
+| `./tc restart` | `make restart` | re-render and force-recreate |
+| `./tc reset` | `make reset` | **destroys** the stack and every volume it owns |
 
-# accounts and agents
-./tc token               # super user token for first-run setup
-./tc admin               # create the first administrator
-./tc agents              # list
-./tc authorize           # authorize every pending agent
+`start`/`stop` are aliases, so muscle memory from `docker compose` works.
 
-# data
-./tc backup [native|logical|cold]
-./tc restore
-./tc prune               # apply TC_BACKUP_KEEP retention
-./tc upgrade
+### Looking at it
 
-# development
-./tc lint                # shellcheck
-./tc test                # bats
-./tc --help
-```
+| Command | `make` | Does |
+|---|---|---|
+| `./tc status` | `make status` | service table; **non-zero exit** unless everything is running |
+| `./tc logs [service]` | `make logs SERVICE=server` | container logs, followed |
+| `./tc journal [tool] [follow]` | `make journal TOOL=stack` | this console's own logs — see [logging](logging.md) |
+| `./tc doctor` | `make doctor` | diagnostics and health probes |
+| `./tc verify` | `make verify` | live end-to-end checks |
+| `./tc verify --deep` | `make verify-deep` | the same checks, with no time limit on the backup one |
+| `./tc preflight` | `make preflight` | is this machine ready — runs before a stack exists |
+| `./tc open` | `make open` | print the URL; a container cannot open your browser |
+| `./tc shell [service]` | `make shell SERVICE=db` | shell inside a running container |
 
-Every one of these has a `make` target of the same name — `make status`, `make admin`,
-`make backup KIND=native`. A test asserts that correspondence holds, and another asserts every
-menu action is reachable from the command line, so the three front ends cannot drift apart.
+`./tc verify --deep` adds no checks. It removes the time budget on the native backup round-trip, for
+a data directory large enough that the default would skip it.
+
+### Accounts
+
+| Command | `make` | Does |
+|---|---|---|
+| `./tc token` | `make token` | super user token, verified against the running server |
+| `./tc admin` | `make admin` | create the first administrator (only when no accounts exist) |
+| `./tc users` | `make users` | every account, and which can administer |
+| `./tc users show <user>` | `make user-show USER=admin` | one account: roles, groups, last sign-in |
+| `./tc users passwd <user>` | `make user-passwd USER=admin` | set a password — works when nobody knows one |
+| `./tc admin reset [user]` | — | alias of `users passwd`, kept for habit |
+
+See [users](users.md) for how a password is chosen and why it is verified before being reported.
+
+### Agents
+
+| Command | `make` | Does |
+|---|---|---|
+| `./tc agents` | `make agents` | connected, authorized and enabled state per agent |
+| `./tc authorize` | `make authorize` | authorize every agent waiting for it |
+
+Scaling and volume pruning live in the menu under **Agents** — see [agents](agents.md).
+
+### Data
+
+| Command | `make` | Does |
+|---|---|---|
+| `./tc backup` | `make backup` | cold backup — the default |
+| `./tc backup cold` | `make backup KIND=cold` | every volume, stack stopped; the exact-restore tier |
+| `./tc backup logical` | `make backup KIND=logical` | `pg_dump` plus the data directory; crosses PostgreSQL majors |
+| `./tc backup native` | `make backup KIND=native` | TeamCity's own archive, taken against a **live** server |
+| `./tc backup list` | `make backup KIND=list` | archives, newest first, with the stack that owns each |
+| `./tc restore` | `make restore` | choose an archive and restore it |
+| `./tc prune` | `make prune` | apply `TC_BACKUP_KEEP`, oldest first |
+| `./tc upgrade` | `make upgrade` | move to another TeamCity version |
+
+The three tiers differ in more than size — see [backup](backup.md).
+
+### Development
+
+| Command | `make` | Does |
+|---|---|---|
+| `./tc lint` | `make lint` | shellcheck, inside the container |
+| `./tc test` | `make test` | the bats suite; no daemon, stack or network needed |
+| `./tc --help` (`help`, `-h`) | `make help` | the command list |
+| — | `make check` | lint + test + verify, and that the run changed no tracked file |
+| — | `make perms` | restore executable bits and strip CRLF after a Windows checkout |
+| — | `make drift` | fail if the working tree has uncommitted changes |
+| — | `make clean` | remove stale console images and apply backup retention |
+
+Tests hold the three surfaces together: every menu entry must name a function that exists, every
+`make` target must map to a command, and every backup kind the error message advertises must be
+dispatched. They exist because `backup list`, `shell`, `open`, `reconfigure` and `prune` were each
+menu-only at some point — present, working, and impossible to script.
+
+### Exit codes
+
+| Code | Means |
+|---|---|
+| `0` | success |
+| `1` | the operation failed, with a reason printed |
+| `2` | the command or argument was not understood |
+
+`./tc status` is the one to script against: non-zero unless every container is running.
+
+> Measuring these through a pipe measures the *last* command in the pipe. `./tc status | tail` then
+> reports the exit code of `tail`, which is almost always 0.
 
 ## Scripting
 
@@ -147,7 +206,7 @@ Two unrelated tokens are involved, and confusing them is the usual way to get st
 `lint` and `test` need no daemon, no stack and no network. `verify` exercises the running stack —
 see [verify](verify.md).
 
-89 tests, and the suite is **pure**: `docker` and the network are stubbed, so it needs no daemon,
+225 tests, and the suite is **pure**: `docker` and the network are stubbed, so it needs no daemon,
 no stack and no internet. It runs anywhere the console image runs and is fast enough to gate a
 commit.
 
@@ -165,7 +224,10 @@ What it covers is deliberately narrow — the logic where a mistake is silent ra
 | `menu.bats` | every menu entry names a handler that exists |
 | `tty.bats` | the gum branch, under a real pseudo-terminal |
 | `exitcodes.bats` | no function ends in a bare conditional-and |
-| `portability.bats` | `tc` stays free of GNU-only and Perl-only dependencies |
+| `portability.bats` | `tc` stays free of GNU-only and Perl-only dependencies, and every hasher yields a valid image tag |
+| `users.bats` | setting a password never needs one, and never claims success it has not checked |
+| `backup.bats` | the disk guard refuses before anything is stopped, at the exact boundary |
+| `secrets.bats` | no credential reaches a tracked file, a log or a diagnostics bundle |
 
 Each file names the bug that motivated it. `volumes.bats` exists because a shipped version mapped
 `/var/lib/docker` only under Docker-in-Docker, leaking three anonymous volumes on a default stack;

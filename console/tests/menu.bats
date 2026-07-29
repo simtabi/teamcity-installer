@@ -189,3 +189,61 @@ setup() {
     run grep -A12 '^users::passwd()' "$LIB/users.sh"
     [[ $output == *'not_ready_reason'* ]]
 }
+
+# --- documentation is a surface too --------------------------------------------
+#
+# `backup list`, `shell`, `open`, `reconfigure` and `prune` were each present,
+# working and undiscoverable at some point — reachable from the menu and from
+# nothing a script or a reader could find. A command nobody can find is not
+# finished, so the reference is checked the same way the other surfaces are.
+
+@test "every dispatched command appears in the console reference" {
+    local doc="$PROJECT_ROOT/docs/tools/console.md"
+    [ -f "$doc" ] || skip 'docs not mounted'
+
+    local -a skiplist=(help -h --help start stop)   # aliases, documented as such
+    local cmd offenders=0
+    while IFS= read -r cmd; do
+        [[ " ${skiplist[*]} " == *" $cmd "* ]] && continue
+        grep -q "tc $cmd" "$doc" || { echo "undocumented: ./tc $cmd"; offenders=$((offenders+1)); }
+    done < <(sed -n '/^    case \$cmd in/,/^    esac/p' "$LIB/main.sh" \
+                | grep -oE '^ {8}[a-z|-]+\)' | tr -d ' )' | tr '|' '\n' | sort -u)
+    [ "$offenders" -eq 0 ]
+}
+
+@test "every subcommand appears in the console reference" {
+    local doc="$PROJECT_ROOT/docs/tools/console.md"
+    [ -f "$doc" ] || skip 'docs not mounted'
+
+    local sub offenders=0
+    for sub in 'backup native' 'backup logical' 'backup cold' 'backup list' \
+               'users show' 'users passwd' 'admin reset' 'verify --deep'; do
+        grep -q "tc $sub" "$doc" || { echo "undocumented: ./tc $sub"; offenders=$((offenders+1)); }
+    done
+    [ "$offenders" -eq 0 ]
+}
+
+@test "every make target appears in the console reference" {
+    local doc="$PROJECT_ROOT/docs/tools/console.md"
+    local mk="$PROJECT_ROOT/Makefile"
+    [ -f "$doc" ] && [ -f "$mk" ] || skip 'docs not mounted'
+
+    local t offenders=0
+    while IFS= read -r t; do
+        grep -q "make $t" "$doc" || { echo "undocumented: make $t"; offenders=$((offenders+1)); }
+    done < <(grep -oE '^## [a-z-]+:' "$mk" | sed 's/^## //; s/:$//' | sort -u)
+    [ "$offenders" -eq 0 ]
+}
+
+@test "the reference does not claim a test count that has drifted" {
+    # It said 89 for a long time while the suite passed 200. A number in prose is
+    # a promise, and a stale one costs trust for everything around it.
+    local doc="$PROJECT_ROOT/docs/tools/console.md"
+    [ -f "$doc" ] || skip 'docs not mounted'
+
+    local claimed actual
+    claimed=$(grep -oE '^[0-9]+ tests' "$doc" | head -1 | grep -oE '[0-9]+') || skip 'no count claimed'
+    actual=$(grep -rhc '^@test' "$BATS_TEST_DIRNAME"/*.bats | paste -sd+ - | bc)
+    (( claimed >= actual - 15 && claimed <= actual + 15 )) \
+        || { echo "reference claims $claimed tests; the suite has $actual"; return 1; }
+}

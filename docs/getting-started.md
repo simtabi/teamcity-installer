@@ -43,6 +43,11 @@ the console instead:
 ./tc token
 ```
 
+
+> The token is reissued on every server start, so take it fresh rather than reusing one. The
+> administrator password you create with it does the opposite — it survives restarts, upgrades and
+> rebuilds. See [users](users.md#lifetimes-which-is-where-people-come-unstuck).
+
 Paste it in and **leave the username blank**.
 
 `./tc token` verifies the token against the server before showing it, so you know it is live:
