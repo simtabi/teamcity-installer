@@ -265,6 +265,7 @@ TeamCity control console
   ./tc doctor              diagnostics
   ./tc token               super user token for TeamCity's first-run setup
   ./tc admin               create the first administrator account
+  ./tc admin reset [user]  reset an administrator password you have lost
   ./tc shell [service]     open a shell in a running container
   ./tc open                print the TeamCity URL
   ./tc reconfigure         change settings, keeping all data
@@ -364,7 +365,8 @@ main::run_command() {
         upgrade)   upgrade::run ;;
         doctor)    doctor::run ;;
         token)     stack::token ;;
-        admin)     admin::bootstrap ;;
+        admin)     if [[ ${1:-} == reset ]]; then admin::reset_password "${2:-}"
+                   else admin::bootstrap; fi ;;
         shell)     stack::shell "${1:-}" ;;
         open)      stack::open_url ;;
         reconfigure) wizard::run ;;

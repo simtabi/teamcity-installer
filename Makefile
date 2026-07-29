@@ -14,6 +14,7 @@ TC    := ./tc
 .PHONY: help perms up down start stop restart status logs journal token admin \
         shell open doctor verify verify-deep preflight install reconfigure \
         agents authorize backup restore prune upgrade reset lint test check \
+        admin-reset \
         drift clean
 
 ## help: list the targets
@@ -79,6 +80,10 @@ token: perms
 ## admin: create the first administrator account
 admin: perms
 	@$(TC) admin
+
+## admin-reset: reset an administrator password you have lost (USER=admin)
+admin-reset: perms
+	@$(TC) admin reset $(USER)
 
 ## shell: open a shell in a container (make shell SERVICE=server)
 shell: perms

@@ -3,6 +3,19 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-07-29
+
+### Added
+
+- **`./tc admin reset`** — resets an administrator password, authenticating with the super user
+  token, which is what makes it work when nobody knows any password. The bootstrap generates a
+  password, shows it once and deliberately never stores it; miss that line and you are locked out of
+  an account that exists and works. The documented recovery was "sign in with the token and change
+  it in the UI" — true, but six clicks through screens nobody has seen. The new password is
+  **verified before being shown**: the console authenticates as that user with no fallback to any
+  other identity, because a 200 on the request proves the request was accepted, not that anyone can
+  sign in.
+
 ## [0.4.1] — 2026-07-29
 
 ### Added
@@ -244,6 +257,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.5.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.5.0
 [0.4.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.1
 [0.4.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.0
 [0.3.2]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.2

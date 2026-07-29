@@ -42,6 +42,25 @@ The password is **generated and shown once**, not written to disk. A second copy
 would go stale the moment you changed it in the UI. Set `TC_ADMIN_USER` and `TC_ADMIN_PASSWORD` in
 `stack/.env` if you need known values — for CI, say — and those are used instead.
 
+
+### If you lose it
+
+```sh
+./tc admin reset            # or: ./tc admin reset <username>
+```
+
+Shown-once means exactly that: miss the line and you are locked out of an account that exists and
+works. This resets it, authenticating with the super user token — which is why it works when nobody
+knows any password: TeamCity prints that token to its log on every start, and the console reads it.
+
+The new password is **verified before it is shown**. A 200 on the request means TeamCity accepted
+it, not that anyone can sign in with the result, and being unable to sign in is the whole problem —
+so the console authenticates with the new credential as that user, with no fallback to any other
+identity, and says whether it worked.
+
+Set `TC_ADMIN_PASSWORD` first if you want a specific value rather than a generated one. It is shown
+once again, for the same reason.
+
 This runs only when there are **zero** users. It is a bootstrap, not user management: once anybody
 exists, further accounts belong in TeamCity's own UI where roles and groups live.
 

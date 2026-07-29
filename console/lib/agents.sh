@@ -80,6 +80,21 @@ agents::_rest() {
     curl "${args[@]}" "$(agents::_rest_base)$path"
 }
 
+# The same call, as a named user rather than as whoever the console can be.
+#
+# Used to prove a password works. Every other REST call here deliberately falls
+# back through stored token then super user token, which is exactly the wrong
+# behaviour when the question is "does *this* credential authenticate" — the
+# fallback would answer yes for a password that does not work at all.
+agents::_rest_as() {
+    local user=$1 pass=$2 method=$3 path=$4
+    curl --silent --show-error --fail --max-time "${TC_REST_TIMEOUT:-20}" \
+        --request "$method" \
+        --user "$user:$pass" \
+        --header 'Accept: application/json' \
+        "$(agents::_rest_base)$path"
+}
+
 # Ensures the console can reach the REST API, asking for an access token only
 # when it genuinely has no other way in.
 agents::ensure_token() {

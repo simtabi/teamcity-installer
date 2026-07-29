@@ -149,3 +149,42 @@ setup() {
     run grep -A10 'Unknown backup kind' "$LIB/main.sh"
     [[ $output == *'return 2'* ]] || { echo 'an unknown kind reports and continues'; return 1; }
 }
+
+# --- password recovery ---------------------------------------------------------
+#
+# The bootstrap generates a password, shows it once and deliberately never writes
+# it down. That is the right call — a second copy on disk goes stale the moment
+# it changes in the UI — but it creates a way to be locked out of an account that
+# exists and works, and the documented recovery was "open a browser and click
+# through six screens you have never seen".
+
+@test "admin reset is reachable from the command line" {
+    grep -qE 'admin\).*reset' "$LIB/main.sh" \
+        || { echo 'the reset path is not dispatched'; return 1; }
+    grep -q 'admin::reset_password' "$LIB/main.sh"
+}
+
+@test "the help text mentions the recovery, or nobody will find it" {
+    run grep 'tc admin reset' "$LIB/main.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "the reset proves the new credential rather than trusting the response" {
+    # A 200 on the PUT means the request was accepted, not that anyone can sign
+    # in with the result — and being unable to sign in is the entire problem.
+    run grep -A4 'agents::_rest_as' "$LIB/admin.sh"
+    [[ $output == *'_rest_as'* ]]
+}
+
+@test "the credential check does not fall back to another identity" {
+    # Every other REST call falls back: stored token, then super user token. Here
+    # that would answer "yes, authenticated" for a password that does not work.
+    run grep -A12 '^agents::_rest_as()' "$LIB/agents.sh"
+    [[ $output == *'--user'* ]]
+    [[ $output != *'_auth_args'* ]] || { echo 'the proof falls back to another identity'; return 1; }
+}
+
+@test "reset refuses on a server that is not ready, and says why" {
+    run grep -A8 '^admin::reset_password()' "$LIB/admin.sh"
+    [[ $output == *'not_ready_reason'* ]]
+}
