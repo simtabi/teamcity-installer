@@ -54,6 +54,15 @@ guessing.
 }
 ```
 
+## Listing what you have
+
+```sh
+./tc backup list          # or: make backup KIND=list
+```
+
+Newest first, by age rather than by name, with the owning stack for each archive — see
+[retention](#retention-and-disk) for why both of those matter.
+
 ## Retention and disk
 
 Archives are around 1 GB each, so `TC_BACKUP_KEEP` (default 5) bounds them: after each successful

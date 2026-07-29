@@ -116,7 +116,7 @@ agents: perms
 authorize: perms
 	@$(TC) authorize
 
-## backup: back up the stack (make backup KIND=native|logical|cold)
+## backup: back up the stack (make backup KIND=native|logical|cold|list)
 backup: perms
 	@$(TC) backup $(or $(KIND),cold)
 

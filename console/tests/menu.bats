@@ -111,3 +111,41 @@ setup() {
     done
     [ ${#missing[@]} -eq 0 ] || { echo "menu-only actions: ${missing[*]}"; return 1; }
 }
+
+# --- capabilities the CLI can reach --------------------------------------------
+#
+# `backup::list` existed from the start and was reachable only from the menu, so
+# nothing could script it — the same gap that once left shell, open, reconfigure
+# and prune menu-only. A function that shows the user something is a capability;
+# if the CLI cannot ask for it, it is half-built.
+
+@test "every backup kind the error message advertises is dispatched" {
+    local msg kinds kind
+    msg=$(grep -o "Use native, logical[^\"']*" "$LIB/main.sh" | head -1)
+    kinds=$(printf '%s' "$msg" | sed 's/Use //; s/ or /, /; s/\.$//')
+    IFS=',' read -ra list <<< "$kinds"
+    for kind in "${list[@]}"; do
+        kind=$(printf '%s' "$kind" | tr -d ' ')
+        grep -qE "^ *$kind\)" "$LIB/main.sh" \
+            || { echo "advertised but not dispatched: $kind"; return 1; }
+    done
+}
+
+@test "backup list is reachable from the command line" {
+    grep -qE '^ *list\) *ui::scope backup; backup::list' "$LIB/main.sh"
+}
+
+@test "the help text names every backup kind that works" {
+    run grep 'tc backup \[kind\]' "$LIB/main.sh"
+    local k
+    for k in native logical cold list; do
+        [[ $output == *"$k"* ]] || { echo "help omits: $k"; return 1; }
+    done
+}
+
+@test "an unknown backup kind exits non-zero rather than merely complaining" {
+    # Piping ./tc into anything hides its exit status behind the last command in
+    # the pipeline, so this is easy to believe fixed when it is not.
+    run grep -A10 'Unknown backup kind' "$LIB/main.sh"
+    [[ $output == *'return 2'* ]] || { echo 'an unknown kind reports and continues'; return 1; }
+}

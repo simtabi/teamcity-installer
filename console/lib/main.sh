@@ -258,7 +258,7 @@ TeamCity control console
   ./tc status              container states; non-zero exit if not fully running
   ./tc agents              list agents
   ./tc authorize           authorize every pending agent
-  ./tc backup [kind]       kind: native | logical | cold  (default cold)
+  ./tc backup [kind]       kind: native | logical | cold | list  (default cold)
   ./tc restore             restore from an archive
   ./tc prune               apply backup retention (TC_BACKUP_KEEP)
   ./tc upgrade             move to another TeamCity version
@@ -353,7 +353,12 @@ main::run_command() {
                 native)  backup::_native ;;
                 logical) backup::_logical ;;
                 cold)    backup::_cold ;;
-                *) ui::err "Unknown backup kind '${1}'. Use native, logical or cold."; return 2 ;;
+                # Reachable from the menu since it existed, and from nowhere a
+                # script could call. That is the same gap that once left shell,
+                # open, reconfigure and prune menu-only: a capability the tool
+                # has and cannot be asked for.
+                list)    ui::scope backup; backup::list ;;
+                *) ui::err "Unknown backup kind '${1}'. Use native, logical, cold or list."; return 2 ;;
             esac ;;
         restore)   backup::restore ;;
         upgrade)   upgrade::run ;;

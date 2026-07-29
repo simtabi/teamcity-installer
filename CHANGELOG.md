@@ -3,6 +3,15 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-07-29
+
+### Added
+
+- **`./tc backup list`** (and `make backup KIND=list`). The listing existed from the start and was
+  reachable only from the menu, so nothing could script it — the same gap that once left `shell`,
+  `open`, `reconfigure` and `prune` menu-only. A test now asserts every kind the error message
+  advertises is actually dispatched.
+
 ## [0.4.0] — 2026-07-29
 
 The same defect had been fixed three times in three modules. This release fixes the cause instead
@@ -235,6 +244,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[0.4.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.1
 [0.4.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.4.0
 [0.3.2]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.2
 [0.3.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.3.1
