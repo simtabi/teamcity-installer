@@ -100,7 +100,7 @@ doctor: perms
 verify: perms
 	@$(TC) verify
 
-## verify-deep: verify, including a real backup round-trip
+## verify-deep: verify, with no time limit on the backup check
 verify-deep: perms
 	@$(TC) verify --deep
 

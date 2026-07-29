@@ -88,9 +88,17 @@ The bats suite is the migration spec: a port is done when it passes the same cas
 
 ## Smaller things, no version bump needed
 
-- **Running the suite on a real Linux host and under WSL 2.** Today their support rests on
-  portability tests rather than execution, and that gap is stated wherever the platforms are
-  claimed. Closing it is the single highest-value contribution someone else could make.
+- **Running the suite on a real Windows host under WSL 2.** Linux is exercised in CI, and the
+  launcher has been run from a container shaped like a WSL distribution — dash, a copied
+  `/etc/localtime`, no `shasum`, a daemon living elsewhere — which found a real bug in the image
+  tag. What that cannot reach is the Windows kernel, the 9p bridge and Docker Desktop's actual
+  integration. Someone with a Windows machine closing that gap remains the single highest-value
+  contribution.
+
+- **Observing TeamCity's data-directory-upgrade confirmation.** The upgrade path is exercised end
+  to end, but reaching that particular maintenance stage needs a server whose first run was
+  completed, and completing one means accepting the licence agreement — which this tool will not
+  do on a user's behalf. It will be seen the first time a real instance is upgraded.
 
 - TeamCity multi-node — would likely trip trigger 4 on its own.
 - `./tc verify` gaining coverage as more of the surface becomes automatable.
