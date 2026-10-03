@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Static analysis over the launcher, the console library, the test helper
       # and the datadir seeder.
@@ -40,7 +40,7 @@ jobs:
     # Pulls ~4 GB of TeamCity images, so it is not run on every push.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure an ephemeral stack
         run: |
