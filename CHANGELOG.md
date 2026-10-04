@@ -3,6 +3,8 @@
 Notable changes to this project. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.6.1] — 2026-07-29
 
 ### Changed
@@ -307,6 +309,7 @@ tools of this kind:
 - Only macOS/arm64 has been exercised. Linux and WSL 2 support comes from removing non-portable
   tooling and from tests asserting those absences — see [docs/platforms.md](docs/platforms.md).
 
+[Unreleased]: https://github.com/simtabi/teamcity-installer/compare/v0.7.1...HEAD
 [0.6.1]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.6.1
 [0.6.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.6.0
 [0.5.0]: https://github.com/simtabi/teamcity-installer/releases/tag/v0.5.0
