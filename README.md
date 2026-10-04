@@ -44,6 +44,34 @@ straight to the licence agreement — and it hands you the super user token that
 which otherwise lives in a log file inside a Docker volume. It then creates the first administrator
 account for you, since a started server with no accounts is one nobody can sign in to.
 
+## Quick start guide and usage
+
+### Getting started
+
+1. Check the host first: `./tc preflight` checks memory, disk, port availability and image
+   architecture.
+2. Run the guided setup: `./tc install` (or **Install** from the `./tc` menu), and say yes to
+   starting the stack.
+3. Open `http://localhost:8111` and paste the super user token from `./tc token`, leaving the
+   username blank. The token is reissued on every server start, so take it fresh.
+4. Accept TeamCity's licence agreement. The database step is skipped, because the console has
+   already configured it.
+5. Create the first administrator, either in TeamCity's setup screen or with `./tc admin`
+   (`TC_ADMIN_USER` and `TC_ADMIN_PASSWORD` set the account; a password is generated if unset).
+6. Authorize the agents so they take builds: `./tc authorize`.
+
+### Usage
+
+```sh
+./tc up         # start
+./tc status     # health and ports; non-zero exit when not fully up
+./tc logs server
+./tc backup     # cold backup into backups/
+./tc down       # stop, keeping data
+```
+
+The full walkthrough is in [Getting started](docs/getting-started.md); everything else is in the [documentation index](#documentation).
+
 ## <a name="documentation"></a>Documentation
 
 ### Guides
