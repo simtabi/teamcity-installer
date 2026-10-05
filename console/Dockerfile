@@ -4,7 +4,7 @@
 # the host. The container drives the host's Docker daemon through a bind-mounted
 # socket; it never runs TeamCity itself.
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 # bash          - the scripts are bash, not ash (arrays, local, [[ ]])
 # coreutils     - GNU stat/numfmt/sort, whose flags the scripts rely on
