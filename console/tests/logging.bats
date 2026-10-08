@@ -56,13 +56,13 @@ setup() {
 @test "credential-shaped text is redacted whatever its source" {
     log::info stack.up 'password=hunter2 token=abc123def456 more'
     log::info stack.up 'Authorization: Bearer eyJhbGciOi.signature'
-    log::info stack.up 'POSTGRES_PASSWORD=s3cr3tvalue'
+    log::info stack.up 'POSTGRES_PASSWORD=redaction-canary-not-a-secret'
 
     run cat "$LOG_DIR/stack.log"
     [[ $output != *hunter2* ]]
     [[ $output != *abc123def456* ]]
     [[ $output != *eyJhbGciOi.signature* ]]
-    [[ $output != *s3cr3tvalue* ]]
+    [[ $output != *redaction-canary-not-a-secret* ]]
 }
 
 @test "redaction does not eat the surrounding message" {
