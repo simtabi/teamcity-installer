@@ -7,6 +7,10 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/New_York
+    groups:
+      github-actions-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: docker
     directory: /console
     schedule:
@@ -14,3 +18,7 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/New_York
+    groups:
+      docker-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
