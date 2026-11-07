@@ -89,13 +89,15 @@ manifest() {
     default_conf
     source "$LIB/backup.sh"
 
-    TC_PG_PASSWORD='example-old-password'
-    docker() { printf 'example-archive-password'; }
+    local archived
+    TC_PG_PASSWORD="$(test_secret)"; archived="$(test_secret)"
+    [ "$TC_PG_PASSWORD" != "$archived" ]
+    docker() { printf '%s' "$archived"; }
     conf::save() { SAVED=1; }
     ui::note() { :; }
 
     backup::_realign_db_password
-    [ "$TC_PG_PASSWORD" = 'example-archive-password' ]
+    [ "$TC_PG_PASSWORD" = "$archived" ]
     [ "${SAVED:-0}" = 1 ]
 }
 
