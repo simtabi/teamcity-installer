@@ -58,6 +58,10 @@ ui_speaks() {
     source "$LIB/ui.sh"
 }
 
+# A throwaway credential, fresh for each call. Tests compare against the value
+# they were given, so nothing depends on what it is.
+test_secret() { od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
+
 # A known-good configuration, so each test only varies what it is about.
 default_conf() {
     TC_STACK=teamcity
@@ -68,10 +72,10 @@ default_conf() {
     TC_PG_VERSION=17
     TC_PG_DB=teamcity
     TC_PG_USER=teamcity
-    # Obviously invented. An earlier version used a value derived from a real
-    # stack's password, which a secret scanner correctly flagged once the repo
-    # went public — a fixture must never be a truncation of anything real.
-    TC_PG_PASSWORD='example-password-not-a-real-secret'
+    # Generated per run, never written down: an earlier version used a value
+    # derived from a real stack's password, and any literal here is one a secret
+    # scanner reports.
+    TC_PG_PASSWORD="$(test_secret)"
     TC_JDBC_VERSION=42.7.13
     TC_MEM_OPTS='-Xmx2g -XX:ReservedCodeCacheSize=640m'
     TC_AGENTS=3

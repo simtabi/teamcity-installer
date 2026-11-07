@@ -54,19 +54,21 @@ setup() {
 }
 
 @test "credential-shaped text is redacted whatever its source" {
-    log::info stack.up 'password=hunter2 token=abc123def456 more'
+    local pw tok canary
+    pw="$(test_secret)"; tok="$(test_secret)"; canary="$(test_secret)"
+    log::info stack.up "password=$pw token=$tok more"
     log::info stack.up 'Authorization: Bearer eyJhbGciOi.signature'
-    log::info stack.up 'POSTGRES_PASSWORD=redaction-canary-not-a-secret'
+    log::info stack.up "POSTGRES_PASSWORD=$canary"
 
     run cat "$LOG_DIR/stack.log"
-    [[ $output != *hunter2* ]]
-    [[ $output != *abc123def456* ]]
+    [[ $output != *"$pw"* ]]
+    [[ $output != *"$tok"* ]]
     [[ $output != *eyJhbGciOi.signature* ]]
-    [[ $output != *redaction-canary-not-a-secret* ]]
+    [[ $output != *"$canary"* ]]
 }
 
 @test "redaction does not eat the surrounding message" {
-    log::info stack.up 'connecting with password=hunter2 to the database'
+    log::info stack.up "connecting with password=$(test_secret) to the database"
     grep -q 'connecting with' "$LOG_DIR/stack.log"
     grep -q 'to the database' "$LOG_DIR/stack.log"
 }
